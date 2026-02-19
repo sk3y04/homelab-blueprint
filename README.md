@@ -1,6 +1,5 @@
-# 🏠 Homelab Blueprint
+# Homelab Blueprint
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/compose/)
 [![Services](https://img.shields.io/badge/Services-13-green.svg)](#services)
 [![Rocky Linux](https://img.shields.io/badge/Rocky_Linux-10-10B981?logo=rockylinux&logoColor=white)](https://rockylinux.org/)
