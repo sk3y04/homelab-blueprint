@@ -1,0 +1,100 @@
+  # --------------------------------------------------------------------------------
+# Matrix Synapse + Element Web Stack
+# --------------------------------------------------------------------------------
+# This Docker Compose configuration deploys a Matrix Synapse homeserver with a
+# PostgreSQL database and Element Web as the browser-based chat client.
+#
+# Services:
+#   - synapse:     Matrix Synapse homeserver — federated messaging.
+#   - synapse-db:  PostgreSQL database for Synapse metadata and messages.
+#   - element-web: Element Web — browser-based Matrix chat client.
+#
+# Identity:
+#   - Server name is set to the BASE domain (e.g. skey.ovh) so Matrix IDs
+#     are @user:skey.ovh. The Synapse process itself runs behind
+#     matrix.<domain> via .well-known delegation served by Nginx on the VPS.
+#
+# Networking:
+#   - synapse and synapse-db communicate on a private 'matrix' network.
+#   - Only synapse (HTTP) and element-web (HTTP) expose ports for Nginx.
+#
+# First-time setup (run ONCE before 'docker compose up'):
+#   chmod +x prepare.sh
+#   ./prepare.sh
+# This generates homeserver.yaml, signing keys, and the log config inside
+# the Synapse data directory. Review and edit homeserver.yaml before starting.
+# --------------------------------------------------------------------------------
+
+services:
+  # PostgreSQL database backing the Synapse homeserver.
+  synapse-db:
+    image: postgres:16-alpine
+    container_name: synapse_db
+    # Automatically restart the container unless explicitly stopped.
+    restart: unless-stopped
+
+    # Persist database files on the host.
+    volumes:
+      - ${SYNAPSE_DB_DIR}:/var/lib/postgresql/data
+
+    # Database credentials sourced from .env.
+    environment:
+      - POSTGRES_DB=${SYNAPSE_POSTGRES_DB}
+      - POSTGRES_USER=${SYNAPSE_POSTGRES_USER}
+      - POSTGRES_PASSWORD=${SYNAPSE_POSTGRES_PASSWORD}
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+
+    networks:
+      - matrix
+
+  # Matrix Synapse homeserver.
+  synapse:
+    image: matrixdotorg/synapse:latest
+    container_name: synapse
+    # Automatically restart the container unless explicitly stopped.
+    restart: unless-stopped
+
+    # Ensure the database is available before starting.
+    depends_on:
+      - synapse-db
+
+    # Expose Synapse HTTP port on the host; nginx on the VPS reaches it
+    # over VPN using this port.
+    ports:
+      - "${SYNAPSE_HTTP_PORT}:8008"
+
+    # Persist Synapse data (homeserver.yaml, signing keys, media store).
+    volumes:
+      - ${SYNAPSE_DATA_DIR}:/data
+
+    environment:
+      - TZ=${TZ}
+
+    networks:
+      - matrix
+
+  # Element Web — browser-based Matrix client.
+  element-web:
+    image: vectorim/element-web:latest
+    container_name: element_web
+    # Automatically restart the container unless explicitly stopped.
+    restart: unless-stopped
+
+    # Expose Element Web HTTP port on the host; nginx on the VPS reaches it
+    # over VPN using this port.
+    ports:
+      - "${ELEMENT_HTTP_PORT}:80"
+
+    # Mount a custom config.json to point Element at the local homeserver.
+    # The host directory must contain a file named 'config.json'.
+    volumes:
+      - ${ELEMENT_CONFIG_DIR}/config.json:/app/config.json:ro
+
+    networks:
+      - matrix
+
+networks:
+  # Dedicated bridge network for Matrix services.
+  matrix:
+    name: matrix
+    driver: bridge

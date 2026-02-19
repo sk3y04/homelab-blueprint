@@ -1,0 +1,155 @@
+# --------------------------------------------------------------------------------
+# Monitoring Stack — Grafana + Prometheus + Loki + Promtail + Node Exporter
+# --------------------------------------------------------------------------------
+# Centralised observability for the entire homelab.
+#
+# Services:
+#   - grafana:        Dashboard & visualisation UI (the only publicly exposed service).
+#   - prometheus:     Time-series metrics database; scrapes Node Exporter and any
+#                     future service exporters.
+#   - loki:           Log aggregation backend (like Prometheus, but for logs).
+#   - promtail:       Agent that ships Docker container logs to Loki.
+#   - node-exporter:  Exposes host-level CPU / RAM / disk / network metrics.
+#
+# Networking:
+#   - All five services share a private 'monitoring' bridge network so they can
+#     reach each other by container name (e.g. prometheus → loki:3100).
+#   - Only Grafana exposes a port on the host; all other ports are bound to
+#     127.0.0.1 so only local / VPN traffic can reach them.
+#
+# Data flow:
+#   Node Exporter ─metrics─► Prometheus ──► Grafana (dashboards)
+#   Docker logs ──► Promtail ──► Loki ──► Grafana (log explorer)
+# --------------------------------------------------------------------------------
+
+services:
+  # ── Grafana ─────────────────────────────────────────────────────────────
+  # The single entry-point for dashboards, metrics, and logs.
+  # Reverse-proxied by the VPS nginx and protected by Authelia 2FA.
+  grafana:
+    image: grafana/grafana-oss:latest
+    container_name: grafana
+    restart: unless-stopped
+
+    ports:
+      - "${GRAFANA_HTTP_PORT}:3000"
+
+    environment:
+      - TZ=${TZ}
+      - GF_SECURITY_ADMIN_USER=${GF_SECURITY_ADMIN_USER}
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD}
+      # Trust the Authelia reverse-proxy headers so Grafana can auto-login.
+      - GF_AUTH_PROXY_ENABLED=true
+      - GF_AUTH_PROXY_HEADER_NAME=Remote-User
+      - GF_AUTH_PROXY_HEADER_PROPERTY=username
+      - GF_AUTH_PROXY_AUTO_SIGN_UP=true
+      - GF_SERVER_ROOT_URL=https://grafana.skey.ovh
+      # Allow embedding in iframes behind Authelia.
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
+
+    networks:
+      - monitoring
+
+  # ── Prometheus ──────────────────────────────────────────────────────────
+  # Scrapes metrics from Node Exporter (and any future exporters).
+  # Bound to 127.0.0.1 — never exposed to the public internet.
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: unless-stopped
+
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT}:9090"
+
+    environment:
+      - TZ=${TZ}
+
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=90d"
+
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ${MONITORING_DATA_DIR}/prometheus:/prometheus
+
+    networks:
+      - monitoring
+
+  # ── Loki ────────────────────────────────────────────────────────────────
+  # Log aggregation database; receives logs from Promtail.
+  # Bound to 127.0.0.1 — not publicly accessible.
+  loki:
+    image: grafana/loki:latest
+    container_name: loki
+    restart: unless-stopped
+
+    ports:
+      - "127.0.0.1:${LOKI_PORT}:3100"
+
+    environment:
+      - TZ=${TZ}
+
+    command: -config.file=/etc/loki/local-config.yaml
+
+    volumes:
+      - ./config/loki-config.yaml:/etc/loki/local-config.yaml:ro
+      - ${MONITORING_DATA_DIR}/loki:/loki
+
+    networks:
+      - monitoring
+
+  # ── Promtail ────────────────────────────────────────────────────────────
+  # Reads Docker container logs via the Docker socket and forwards them to Loki.
+  # No host port needed — it only pushes data outbound to Loki.
+  promtail:
+    image: grafana/promtail:latest
+    container_name: promtail
+    restart: unless-stopped
+
+    environment:
+      - TZ=${TZ}
+
+    command: -config.file=/etc/promtail/config.yaml
+
+    volumes:
+      - ./config/promtail-config.yaml:/etc/promtail/config.yaml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${MONITORING_DATA_DIR}/promtail:/tmp
+
+    networks:
+      - monitoring
+
+  # ── Node Exporter ───────────────────────────────────────────────────────
+  # Exposes host CPU, RAM, disk, and network metrics to Prometheus.
+  # Bound to 127.0.0.1 — not publicly accessible.
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    restart: unless-stopped
+
+    ports:
+      - "127.0.0.1:${NODE_EXPORTER_PORT}:9100"
+
+    command:
+      - "--path.rootfs=/host"
+
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
+
+    networks:
+      - monitoring
+
+networks:
+  # Private bridge network shared by all monitoring containers.
+  monitoring:
+    name: monitoring
+
+volumes:
+  grafana-data:

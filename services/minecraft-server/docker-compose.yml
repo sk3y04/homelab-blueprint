@@ -1,0 +1,40 @@
+# --------------------------------------------------------------------------------
+# Minecraft Server Stack
+# --------------------------------------------------------------------------------
+# This Docker Compose configuration runs a vanilla Minecraft server using the
+# popular 'itzg/minecraft-server' image.
+#
+# Services:
+#   - mc: The Minecraft server instance.
+#
+# Configuration:
+#   - Accepts the EULA via environment variable.
+#   - Persists world data and configuration to a local 'data' directory.
+#   - Exposes the standard Minecraft port 25565.
+# --------------------------------------------------------------------------------
+
+services:
+  # Vanilla Minecraft server using itzg's image.
+  mc:
+    image: itzg/minecraft-server:latest
+
+    # Pull the latest image daily to keep the server up to date.
+    pull_policy: daily
+
+    # Keep STDIN open and allocate a TTY for interactive console access.
+    tty: true
+    stdin_open: true
+
+    # Expose the Minecraft server port on the host.
+    ports:
+      - "${MINECRAFT_PORT}:25565"
+
+    # Required to legally run the server.
+    environment:
+      EULA: "${EULA}"
+      VERSION: "${VERSION}"
+
+    # Persist world data and server configuration under the host data directory.
+    volumes:
+      # Attach the relative directory 'data' to the container's /data path.
+      - ${MINECRAFT_DATA_DIR}:/data

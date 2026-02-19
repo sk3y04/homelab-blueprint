@@ -1,0 +1,125 @@
+# --------------------------------------------------------------------------------
+# P2P VPN Stack with Gluetun
+# --------------------------------------------------------------------------------
+# This Docker Compose configuration sets up a secure peer-to-peer (P2P) environment
+# where all traffic from client applications is routed through a VPN tunnel managed
+# by the Gluetun container.
+#
+# Services:
+#   - gluetun:     VPN client acting as the network gateway. Supports WireGuard,
+#                  OpenVPN, and various providers.
+#   - qbittorrent: BitTorrent client for downloading media.
+#   - soulseek:    P2P music sharing client.
+#
+# Networking:
+#   The 'qbittorrent' and 'soulseek' services use 'network_mode: service:gluetun'.
+#   This ensures they share the network stack of the 'gluetun' container, meaning
+#   their traffic is encrypted and tunneled via the VPN. Ports for these services
+#   must be exposed on the 'gluetun' container, not on the individual service containers.
+#
+# Configuration:
+#   This setup relies heavily on environment variables for configuration (VPN creds,
+#   paths, ports, PUID/PGID). Ensure a .env file is present in the same directory.
+# --------------------------------------------------------------------------------
+
+services:
+  # VPN gateway container using Gluetun; all traffic for qbittorrent and soulseek
+  # is forced through this container's VPN tunnel.
+  gluetun:
+    image: qmcgaw/gluetun:latest
+    container_name: gluetun
+
+    # Required to manage networking and use /dev/net/tun for the VPN.
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+
+    # Gluetun VPN configuration (endpoint, keys, and allowed ports).
+    environment:
+      - VPN_SERVICE_PROVIDER=${VPN_SERVICE_PROVIDER}
+      - VPN_TYPE=${VPN_TYPE}
+      - VPN_ENDPOINT_IP=${VPN_ENDPOINT_IP}
+      - VPN_ENDPOINT_PORT=${VPN_ENDPOINT_PORT}  
+      - WIREGUARD_PUBLIC_KEY=${WIREGUARD_PUBLIC_KEY}
+      - WIREGUARD_PRIVATE_KEY=${WIREGUARD_PRIVATE_KEY}
+      - WIREGUARD_ADDRESSES=${WIREGUARD_ADDRESSES}
+      - FIREWALL_VPN_INPUT_PORTS=${FIREWALL_VPN_INPUT_PORTS}  # Forwarded + app ports allowed through VPN
+      - TZ=${TZ}
+
+    # Persist Gluetun state and share host's timezone.
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ${GLUETUN_CONFIG_DIR}:/gluetun
+
+    # Expose ports on the host that tunnel into Gluetun over the VPN.
+    ports:
+      - "${GLUETUN_QBITTORRENT_WEBUI_PORT}:${QBITTORRENT_INTERNAL_PORT}"      # qBittorrent WebUI
+      - "${GLUETUN_VPN_PORT}:${VPN_FORWARDED_PORT}"                           # VPN forwarded port TCP
+      - "${GLUETUN_VPN_PORT}:${VPN_FORWARDED_PORT}/udp"                       # VPN forwarded port UDP
+      - "${GLUETUN_SOULSEEK_WEBUI_PORT}:${SOULSEEK_INTERNAL_WEBUI_PORT}"     # Soulseek WebUI (noVNC)
+      - "${GLUETUN_SOULSEEK_LISTEN_PORT}:${SOULSEEK_INTERNAL_LISTEN_PORT}"   # Soulseek listening port
+      - "${GLUETUN_SOULSEEK_OBFUSCATED_PORT}:${SOULSEEK_INTERNAL_OBFUSCATED_PORT}"   # Soulseek obfuscated port
+
+    # Automatically restart the container unless explicitly stopped.
+    restart: unless-stopped
+
+  # qBittorrent client whose traffic is routed entirely through Gluetun.
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: qbittorrent
+
+    # Share Gluetun's network stack so all traffic goes through the VPN.
+    network_mode: "service:gluetun"
+
+    # Run qBittorrent under the specified user/group, timezone, and WebUI port.
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+      - WEBUI_PORT=${WEBUI_PORT}
+
+    # Persist qBittorrent config and downloads; mount media library for seeding.
+    volumes:
+      - ${QBITTORRENT_CONFIG_DIR}:/config
+      - ${QBITTORRENT_DOWNLOADS_DIR}:/downloads
+      - ${MEDIA_MUSIC_DIR}:/media/music
+      - ${MEDIA_MOVIES_DIR}:/media/movies
+      - ${MEDIA_SERIES_DIR}:/media/series
+
+    # Ensure the VPN gateway is ready before starting the client.
+    depends_on:
+      - gluetun
+    # Automatically restart the container unless explicitly stopped.
+    restart: unless-stopped
+
+  # Soulseek client also routed via the Gluetun VPN.
+  soulseek:
+    image: realies/soulseek:latest
+    container_name: soulseek
+
+    # Share Gluetun's network stack to force traffic through VPN.
+    network_mode: "service:gluetun"
+
+    # Run Soulseek under specified user/group and timezone.
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+
+    # Persist Soulseek configuration, downloads, logs, and shared folders;
+    # mount the media library for sharing.
+    volumes:
+      - ${SOULSEEK_APPDATA_DIR}:/data/.SoulseekQt
+      - ${SOULSEEK_DOWNLOADS_DIR}:/data/Soulseek Downloads
+      - ${SOULSEEK_LOGS_DIR}:/data/Soulseek Chat Logs
+      - ${SOULSEEK_SHARED_DIR}:/data/Soulseek Shared Folder
+      - ${MEDIA_MUSIC_DIR}:/media/music
+      - ${MEDIA_MOVIES_DIR}:/media/movies
+      - ${MEDIA_SERIES_DIR}:/media/series
+
+    # Ensure the VPN gateway is ready before starting the client.
+    depends_on:
+      - gluetun
+    # Automatically restart the container unless explicitly stopped.
+    restart: unless-stopped

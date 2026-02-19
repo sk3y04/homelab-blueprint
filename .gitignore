@@ -1,0 +1,28 @@
+# ==========================================================================
+# Git Ignore — Homelab Blueprint
+# ==========================================================================
+# Only example/template files are committed. All real config files
+# containing secrets, domains, or personal data are ignored.
+# ==========================================================================
+
+# ── Environment Files ─────────────────────────────────────────────────────
+**/.env
+!**/.env.example
+
+# ── Authelia (real config contains domain, secrets, user data) ────────────
+services/authelia/config/configuration.yml
+services/authelia/config/users_database.yml
+services/authelia/config/db.sqlite3
+services/authelia/config/notification.txt
+
+# ── Nginx (real config contains domain, IPs, ports) ──────────────────────
+vps/nginx/nginx.conf
+vps/nginx/conf.d/services.conf
+
+# ── Firewall (real config contains IPs) ───────────────────────────────────
+vps/pf.conf
+
+# ── Guacamole runtime data ────────────────────────────────────────────────
+services/guacamole/data/
+services/guacamole/nginx/ssl/
+services/guacamole/record/

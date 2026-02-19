@@ -1,0 +1,23 @@
+# ==========================================================================
+# CoolerControl — Hardware Fan & Cooling Monitoring
+# ==========================================================================
+# Provides a web UI for monitoring and controlling fans, pumps, and thermal
+# sensors. Requires privileged mode for direct hardware sensor access.
+#
+# Containers:
+#   - coolercontrold  (CoolerControl daemon + web UI)
+#
+# Ports:
+#   - ${COOLERCONTROL_PORT}:11987  (Web UI)
+# ==========================================================================
+
+services:
+  coolercontrold:
+    image: coolercontrol/coolercontrold
+    container_name: coolercontrold
+    privileged: true
+    ports:
+      - "${COOLERCONTROL_PORT}:11987"
+    volumes:
+      - ${COOLERCONTROL_CONFIG_DIR}:/etc/coolercontrol
+    restart: unless-stopped

@@ -1,0 +1,40 @@
+# --------------------------------------------------------------------------------
+# AdGuard Home — Network-wide DNS Ad Blocker
+# --------------------------------------------------------------------------------
+# This Docker Compose configuration deploys AdGuard Home, a network-wide software
+# for blocking ads, trackers, and malicious domains at the DNS level.
+#
+# Services:
+#   - adguard: The AdGuard Home application (DNS server + web dashboard).
+#
+# Networking:
+#   - DNS (port 53 TCP/UDP) is exposed on the host for LAN clients.
+#   - Web UI (port 3000) is exposed for remote administration via reverse proxy.
+#
+# Notes:
+#   - On first run, the setup wizard is accessible on port 3000.
+#   - After initial setup, the web dashboard moves to port 3000 as well.
+#   - Point your router or LAN clients to the home server's IP for DNS resolution.
+#   - Ensure no other service (e.g. systemd-resolved) is binding port 53.
+# --------------------------------------------------------------------------------
+
+services:
+  # AdGuard Home DNS server and ad-blocking dashboard.
+  adguard:
+    image: adguard/adguardhome:latest
+    container_name: adguard-home
+
+    # Automatically restart the container unless explicitly stopped.
+    restart: unless-stopped
+
+    # Expose DNS ports on the host for LAN clients, and the web UI port for
+    # reverse-proxied administration.
+    ports:
+      - "${ADGUARD_DNS_PORT}:53/tcp"
+      - "${ADGUARD_DNS_PORT}:53/udp"
+      - "${ADGUARD_WEB_PORT}:3000/tcp"
+
+    # Persist AdGuard Home configuration and runtime data.
+    volumes:
+      - ${ADGUARD_WORK_DIR}:/opt/adguardhome/work
+      - ${ADGUARD_CONFIG_DIR}:/opt/adguardhome/conf

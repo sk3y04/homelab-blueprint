@@ -1,0 +1,52 @@
+# --------------------------------------------------------------------------------
+# Jellyfin Media Server Stack
+# --------------------------------------------------------------------------------
+# This Docker Compose configuration deploys Jellyfin, a Free Software Media System
+# that puts you in control of managing and streaming your media.
+#
+# Services:
+#   - jellyfin: The media server application.
+#
+# Networking:
+#   - Uses a dedicated 'media_internal' bridge network.
+#   - Exposes port 8096 for HTTP access (typically behind a reverse proxy).
+#
+# Hardware Acceleration:
+#   - Maps /dev/dri for hardware transcoding support (Intel QuickSync / AMD VAAPI).
+# --------------------------------------------------------------------------------
+
+services:
+  # Jellyfin media server, exposed over HTTP and typically reverse-proxied by nginx.
+  jellyfin:
+    image: jellyfin/jellyfin:latest
+    container_name: jellyfin
+    # Automatically restart the container unless explicitly stopped.
+    restart: unless-stopped
+
+    # Expose Jellyfin HTTP port on the host; nginx on another server reaches it
+    # over VPN using this port.
+    ports:
+      - "${JELLYFIN_HTTP_PORT}:8096"
+
+    # Basic runtime configuration and the externally reachable URL Jellyfin
+    # should advertise to clients.
+    environment:
+      - TZ=${TZ}
+      - JELLYFIN_PublishedServerUrl=${JELLYFIN_PUBLISHED_SERVER_URL}
+
+    # Persist Jellyfin configuration/cache and mount the media library.
+    volumes:
+      - ${JELLYFIN_CONFIG_DIR}:/config
+      - ${JELLYFIN_CACHE_DIR}:/cache
+      - ${MEDIA_ROOT_DIR}:/media
+      - ${TMP_DIR}:/tmp
+
+    # Hardware acceleration for transcoding using host GPU (DRI devices).
+    devices:
+      - /dev/dri:/dev/dri
+
+networks:
+  # Dedicated bridge network for media-related containers.
+  default:
+    name: media_internal
+    driver: bridge

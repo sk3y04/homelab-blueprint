@@ -1,0 +1,144 @@
+# ==========================================================================
+# Authelia Configuration — WebAuthn (YubiKey) + TOTP
+# ==========================================================================
+# This is an example template. Replace all "example.com" references with
+# your actual domain. Secrets (session secret, storage encryption key) are
+# injected via environment variables — see .env.example.
+#
+# Generate secrets with:
+#   openssl rand -base64 48
+#
+# ==========================================================================
+
+server:
+  address: "tcp://0.0.0.0:9091/"
+
+log:
+  level: info
+
+# ── 2FA Method Priority ───────────────────────────────────────────────────
+# WebAuthn (YubiKey) is the default; TOTP available as a fallback.
+default_2fa_method: webauthn
+
+# ── WebAuthn (YubiKey / Security Keys) ────────────────────────────────────
+webauthn:
+  disable: false
+  display_name: Authelia
+  attestation_conveyance_preference: indirect
+  user_verification: preferred
+  timeout: 60s
+
+# ── TOTP (Backup / Fallback) ─────────────────────────────────────────────
+totp:
+  issuer: example.com
+  period: 30
+  skew: 1
+
+# ── Authentication Backend ────────────────────────────────────────────────
+# File-based user database (simple, no external DB needed).
+authentication_backend:
+  file:
+    path: /config/users_database.yml
+    password:
+      algorithm: argon2id
+      iterations: 3
+      memory: 65536
+      parallelism: 4
+      salt_length: 16
+      key_length: 32
+
+# ── Session ───────────────────────────────────────────────────────────────
+# The session secret is injected via the AUTHELIA_SESSION_SECRET env var.
+session:
+  name: authelia_session
+  expiration: 12h
+  inactivity: 1h
+  remember_me: 1M
+  cookies:
+    - domain: "example.com"
+      authelia_url: "https://auth.example.com"
+
+# ── Storage (local SQLite) ────────────────────────────────────────────────
+# The encryption key is injected via the AUTHELIA_STORAGE_ENCRYPTION_KEY
+# env var.
+storage:
+  local:
+    path: /config/db.sqlite3
+
+# ── Identity Validation ────────────────────────────────────────────────────
+# JWT secret used for identity verification links (e.g. device registration).
+# Set AUTHELIA_IDENTITY_VALIDATION_RESET_PASSWORD_JWT_SECRET in .env —
+# Authelia reads this env var directly; no value should be hardcoded here.
+identity_validation:
+  reset_password: {}
+
+# ── Notifier (for 2FA registration emails) ────────────────────────────────
+# Use filesystem notifier for testing; switch to SMTP for production.
+notifier:
+  filesystem:
+    filename: /config/notification.txt
+  # smtp:
+  #   host: smtp.example.com
+  #   port: 587
+  #   username: authelia@example.com
+  #   password: "SMTP_PASSWORD"
+  #   sender: "Authelia <authelia@example.com>"
+
+# ── Access Control ────────────────────────────────────────────────────────
+access_control:
+  default_policy: deny
+  rules:
+    # Authelia portal itself — must be accessible to serve the login page.
+    - domain: "auth.example.com"
+      policy: bypass
+
+    # Jellyfin — bypass (Jellyfin handles its own authentication).
+    - domain: "jellyfin.example.com"
+      policy: bypass
+
+    # Services requiring full 2FA (password + YubiKey/TOTP).
+    # These are examples; replace/remove with your actual services.
+    - domain: "cloud.example.com"
+      policy: two_factor
+
+    - domain: "code.example.com"
+      policy: two_factor
+
+    - domain: "torrent.example.com"
+      policy: two_factor
+
+    - domain: "vm.example.com"
+      policy: two_factor
+
+    - domain: "soulseek.example.com"
+      policy: two_factor
+
+    - domain: "adguard.example.com"
+      policy: two_factor
+
+    # Matrix Synapse API — must be publicly accessible for federation & clients.
+    - domain: "matrix.example.com"
+      resources:
+        - "^/_matrix/.*$"
+        - "^/_synapse/client/.*$"
+      policy: bypass
+
+    # Matrix Synapse admin API — protected by 2FA.
+    # Note: To access the admin API, you'll need to use a browser or tool authenticated with Authelia,
+    # or configure bypass rules for specific admin tools if 2FA cannot be supported.
+    - domain: "matrix.example.com"
+      resources:
+        - "^/_synapse/admin/.*$"
+      policy: two_factor
+
+    # Element Web — chat client, protected by 2FA.
+    - domain: "element.example.com"
+      policy: two_factor
+
+    # Grafana — monitoring dashboard, protected by 2FA.
+    - domain: "grafana.example.com"
+      policy: two_factor
+
+    # BentoPDF — PDF toolkit, protected by 2FA.
+    - domain: "pdf.example.com"
+      policy: two_factor

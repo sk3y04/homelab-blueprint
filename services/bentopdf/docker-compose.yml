@@ -1,0 +1,55 @@
+# --------------------------------------------------------------------------------
+# BentoPDF — Privacy-First PDF Toolkit
+# --------------------------------------------------------------------------------
+# This Docker Compose configuration deploys BentoPDF, a privacy-focused PDF
+# toolkit that processes all files locally in the browser (no server uploads).
+#
+# Services:
+#   - bentopdf: The main web application served via nginx.
+#
+# Networking:
+#   - Exposes a single HTTP port for the web UI.
+#   - Typically reverse-proxied by nginx on the VPS with TLS termination.
+#
+# Notes:
+#   - All PDF processing happens client-side in the browser (WASM-based).
+#   - LibreOffice-based tools (Word/Excel/PPT conversion) require specific
+#     CORS headers (Cross-Origin-Opener-Policy / Cross-Origin-Embedder-Policy)
+#     which are included in the container's built-in nginx config.
+#   - If using a reverse proxy, ensure those headers are preserved.
+# --------------------------------------------------------------------------------
+
+services:
+  # BentoPDF web application — browser-based PDF tools.
+  bentopdf:
+    image: ghcr.io/alam00000/bentopdf:latest
+    container_name: bentopdf
+
+    # Automatically restart the container unless explicitly stopped.
+    restart: unless-stopped
+
+    # Expose HTTP port on the host; typically reverse-proxied by nginx on VPS.
+    ports:
+      - "${BENTOPDF_HTTP_PORT}:8080"
+
+    # Optional: run as a specific non-root user.
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+
+    # Resource limits — BentoPDF is a static site so requirements are minimal.
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
+    # Health check to verify the web UI is responding.
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

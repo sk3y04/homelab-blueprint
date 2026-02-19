@@ -1,0 +1,39 @@
+# --------------------------------------------------------------------------------
+# Code Server (VS Code) Stack
+# --------------------------------------------------------------------------------
+# This Docker Compose configuration sets up a browser-based Visual Studio Code
+# instance (code-server), allowing for remote development from any device.
+#
+# Services:
+#   - code-server: The main application container running VS Code.
+#
+# Configuration:
+#   - Password and workspace settings are configured via environment variables.
+#   - Configuration and workspace data are persisted to the host.
+# --------------------------------------------------------------------------------
+
+services:
+  # Browser-based VS Code instance for remote development.
+  code-server:
+    image: linuxserver/code-server:4.107.0
+    container_name: code-server
+
+    # Run code-server under the specified user/group and timezone; configure
+    # default password and workspace.
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+      - PASSWORD=${CODE_SERVER_PASSWORD}
+      - DEFAULT_WORKSPACE=${CODE_SERVER_DEFAULT_WORKSPACE}
+
+    # Persist code-server settings, extensions, and workspace data.
+    volumes:
+      - ${CODE_SERVER_CONFIG_DIR}:/config
+
+    # Expose HTTPS Web UI port on the host; typically reverse-proxied.
+    ports:
+      - ${CODE_SERVER_HTTP_PORT}:8443
+
+    # Automatically restart the container unless explicitly stopped.
+    restart: unless-stopped

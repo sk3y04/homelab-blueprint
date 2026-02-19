@@ -1,0 +1,62 @@
+# --------------------------------------------------------------------------------
+# TriliumNext Notes — Personal Knowledge Base
+# --------------------------------------------------------------------------------
+# This Docker Compose configuration deploys TriliumNext Notes, a hierarchical
+# note-taking application with rich text editing, code snippets, images, and
+# powerful scripting capabilities.
+#
+# Services:
+#   - trilium: The main web application with an embedded database.
+#
+# Networking:
+#   - Exposes a single HTTP port for the web UI.
+#   - Typically reverse-proxied by nginx on the VPS with TLS termination.
+#
+# Notes:
+#   - TriliumNext uses an embedded SQLite/better-sqlite3 database — no
+#     external DB service is required.
+#   - All notes, attachments, and revision history are stored in a single
+#     data directory for easy backups.
+#   - Supports real-time sync between server and desktop client instances.
+#   - WebSocket connections are required for sync and live updates.
+# --------------------------------------------------------------------------------
+
+services:
+  # TriliumNext Notes — hierarchical knowledge base with scripting support.
+  trilium:
+    image: ghcr.io/triliumnext/notes:v0.95.0
+    container_name: trilium
+
+    # Automatically restart the container unless explicitly stopped.
+    restart: unless-stopped
+
+    # Expose HTTP port on the host; typically reverse-proxied by nginx on VPS.
+    ports:
+      - "${TRILIUM_HTTP_PORT}:8080"
+
+    # Persist all note data, configuration, and backups on the host.
+    volumes:
+      - ${TRILIUM_DATA_DIR}:/home/node/trilium-data
+
+    # Timezone and instance configuration.
+    environment:
+      - TRILIUM_DATA_DIR=/home/node/trilium-data
+      - TZ=${TZ}
+
+    # Resource limits — TriliumNext is lightweight but can spike during
+    # full-text search indexing or large imports.
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+    # Health check to verify the web UI is responding.
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

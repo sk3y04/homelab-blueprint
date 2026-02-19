@@ -1,0 +1,58 @@
+# --------------------------------------------------------------------------------
+# Authelia Authentication Gateway Stack
+# --------------------------------------------------------------------------------
+# This Docker Compose configuration deploys Authelia, a centralized authentication
+# portal that provides single sign-on (SSO) with two-factor authentication
+# (WebAuthn/YubiKey + TOTP) in front of all reverse-proxied services.
+#
+# Services:
+#   - authelia: The authentication gateway application.
+#
+# Configuration:
+#   - Authelia configuration files (configuration.yml, users_database.yml) are
+#     stored in the mounted config directory.
+#   - Uses a local SQLite database for storage (no external DB needed).
+#   - See guide/AUTHELIA.md for full setup instructions including Nginx
+#     integration, 2FA registration, and access policies.
+#
+# Networking:
+#   - Exposes port 9091 for HTTP access (typically behind a reverse proxy on
+#     the VPS via auth_request).
+# --------------------------------------------------------------------------------
+
+services:
+  # Authelia authentication portal providing SSO and 2FA for all services.
+  authelia:
+    image: authelia/authelia:latest
+    container_name: authelia
+
+    # Automatically restart the container unless explicitly stopped.
+    restart: unless-stopped
+
+    # Fix config directory ownership at startup so the host user (PUID:PGID)
+    # and the container process can both read/write the files, then exec
+    # the real Authelia process.
+    user: "0:0"
+    entrypoint: >-
+      sh -c "chown -R $${PUID}:$${PGID} /config && exec authelia --config /config/configuration.yml"
+
+    # Expose Authelia HTTP port on the host; nginx on the VPS reaches it
+    # over VPN using this port.
+    ports:
+      - "${AUTHELIA_HTTP_PORT}:9091"
+
+    # Persist Authelia configuration, user database, and SQLite storage.
+    volumes:
+      - ${AUTHELIA_CONFIG_DIR}:/config
+
+    # Basic runtime configuration and secrets.
+    # Authelia reads AUTHELIA_SESSION_SECRET and AUTHELIA_STORAGE_ENCRYPTION_KEY
+    # directly as environment variables, overriding the configuration file.
+    # PUID/PGID control the ownership applied to /config at startup.
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+      - AUTHELIA_SESSION_SECRET=${AUTHELIA_SESSION_SECRET}
+      - AUTHELIA_STORAGE_ENCRYPTION_KEY=${AUTHELIA_STORAGE_ENCRYPTION_KEY}
+      - AUTHELIA_IDENTITY_VALIDATION_RESET_PASSWORD_JWT_SECRET=${AUTHELIA_IDENTITY_VALIDATION_JWT_SECRET}
