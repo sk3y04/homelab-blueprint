@@ -392,7 +392,7 @@ Detailed setup guides for the infrastructure surrounding these Docker stacks:
 1. **Clone the repository:**
 
    ```bash
-   git clone https://github.com/<your-username>/homelab-blueprint.git
+   git clone https://github.com/sk3y04/homelab-blueprint.git
    cd homelab-blueprint
    ```
 
