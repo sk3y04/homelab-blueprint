@@ -61,6 +61,7 @@ services:
     image: prom/prometheus:latest
     container_name: prometheus
     restart: unless-stopped
+    user: root
 
     ports:
       - "127.0.0.1:${PROMETHEUS_PORT}:9090"
@@ -87,6 +88,7 @@ services:
     image: grafana/loki:latest
     container_name: loki
     restart: unless-stopped
+    user: root
 
     ports:
       - "127.0.0.1:${LOKI_PORT}:3100"
@@ -142,6 +144,26 @@ services:
     pid: host
     volumes:
       - /:/host:ro,rslave
+
+    networks:
+      - monitoring
+
+  # ── XMRig Exporter ──────────────────────────────────────────────────────
+  # Translates XMRig's native JSON API into Prometheus-scrapable metrics.
+  # Reaches XMRig on the host via the Docker bridge gateway (172.17.0.1).
+  # Bound to 127.0.0.1 — not publicly accessible.
+  xmrig-exporter:
+    build: ./xmrig-exporter
+    container_name: xmrig-exporter
+    restart: unless-stopped
+
+    ports:
+      - "127.0.0.1:${XMRIG_EXPORTER_PORT:-9189}:9189"
+
+    environment:
+      - TZ=${TZ}
+      - XMRIG_URL=http://172.17.0.1:18088
+      - EXPORTER_PORT=9189
 
     networks:
       - monitoring

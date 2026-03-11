@@ -3,9 +3,10 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/compose/)
 [![Services](https://img.shields.io/badge/Services-13-green.svg)](#services)
+[![Host Services](https://img.shields.io/badge/Host_Services-2-orange.svg)](#-monero-full-node--xmrig-mining)
 [![Rocky Linux](https://img.shields.io/badge/Rocky_Linux-10-10B981?logo=rockylinux&logoColor=white)](https://rockylinux.org/)
 
-Production-ready Docker Compose stacks for a self-hosted home server — 13 services with VPS reverse-proxy architecture, Authelia 2FA, and full observability. Fork it, configure your `.env` files, and deploy.
+Production-ready Docker Compose stacks and host service configs for a self-hosted home server — 13 Docker services + Monero full node & XMRig miner, VPS reverse-proxy architecture, Authelia 2FA, and full observability. Fork it, configure your `.env` files, and deploy.
 
 ---
 
@@ -27,12 +28,14 @@ Production-ready Docker Compose stacks for a self-hosted home server — 13 serv
   - [Monitoring Stack](#-monitoring-stack--observability)
   - [BentoPDF](#-bentopdf--pdf-toolkit)
   - [TriliumNext Notes](#-triliumnext-notes--personal-knowledge-base)
+  - [Monero Full Node & XMRig Mining](#%EF%B8%8F-monero-full-node--xmrig-mining)
 - [Guides](#guides)
   - [Network Architecture](NETWORK.md)
   - [Nginx Reverse Proxy](guide/NGINX.md)
   - [Authelia 2FA Gateway](guide/AUTHELIA.md)
   - [VPS Hardening](guide/HARDENING.md)
   - [Monitoring Stack](guide/MONITORING.md)
+  - [Monero Full Node & XMRig Mining](guide/MONERO.md)
 - [Prerequisites](#prerequisites)
 - [Getting Started](#getting-started)
 - [Project Structure](#project-structure)
@@ -307,7 +310,7 @@ Three-container deployment:
 | **Purpose** | Centralized metrics, logs, and dashboards for the entire homelab |
 | **Port** | `3100` (Grafana Web UI) |
 
-Five-container deployment:
+Six-container deployment:
 
 | Container | Image | Role |
 |---|---|---|
@@ -316,12 +319,14 @@ Five-container deployment:
 | `loki` | `grafana/loki:latest` | Log aggregation backend |
 | `promtail` | `grafana/promtail:latest` | Docker log shipper → Loki |
 | `node-exporter` | `prom/node-exporter:latest` | Host CPU / RAM / disk / network metrics |
+| `xmrig-exporter` | local build (`xmrig-exporter/Dockerfile`) | XMRig HTTP API → Prometheus metrics (`:9189`) |
 
 - **Grafana** is the only publicly exposed service (reverse-proxied and protected by Authelia 2FA). All other components are bound to `127.0.0.1`.
 - Prometheus and Loki data sources are **auto-provisioned** on first boot — no manual setup needed.
 - Promtail auto-discovers all running Docker containers and ships their logs to Loki.
-- Ships with two pre-built dashboards: **Host Metrics** (CPU, RAM, disk, network gauges and graphs) and **Container Logs** (searchable log viewer with error highlighting).
-- All five services share a private `monitoring` bridge network.
+- Ships with three pre-built dashboards: **Host Metrics** (CPU, RAM, disk, network gauges and graphs), **Container Logs** (searchable log viewer with error highlighting), and **XMRig Mining** (hashrate, shares, pool connection, hugepage allocation).
+- `xmrig-exporter` translates XMRig's HTTP API (`0.0.0.0:18088`) into Prometheus text format — no changes to XMRig itself required.
+- All six services share a private `monitoring` bridge network.
 
 ---
 
@@ -364,6 +369,35 @@ Five-container deployment:
 
 ---
 
+### ⛏️ Monero Full Node & XMRig Mining
+
+> 📖 **Guide:** [Full Setup Guide](guide/MONERO.md)
+
+| | |
+|---|---|
+| **Directory** | `services/xmrig/` |
+| **Type** | Native host services (systemd) — not Docker |
+| **Purpose** | Monero full node, Ledger hardware wallet, and CPU mining via MoneroOcean |
+
+Two systemd services running directly on the host:
+
+| Service | Binary | Role |
+|---|---|---|
+| `monerod` | `/opt/monero/monerod` | Monero full node — P2P `18080`, RPC `127.0.0.1:18081` |
+| `xmrig` | `/opt/xmrig/xmrig` | XMRig CPU miner — HTTP API `0.0.0.0:18088` |
+
+- **`services/xmrig/setup.sh`** — automated idempotent installer: builds XMRig from source, configures hugepages & MSR, writes `config.json`, installs the systemd unit, and starts mining. Usage: `sudo ./setup.sh <WALLET_ADDRESS> [WORKER_NAME] [MAX_THREADS_HINT]`
+- `monerod` runs a **pruned** blockchain (~70 GB vs ~200 GB) with RPC restricted to localhost.
+- XMRig targets **MoneroOcean** pool over TLS port 443 for maximum firewall compatibility.
+- **Ledger Nano S Plus** support via `monero-wallet-cli --generate-from-device` (Guide 2 in MONERO.md covers udev rules, wallet generation, and common failure points).
+- **Hugepages** (2 MB) and **MSR wrmsr mod** are pre-configured for maximum RandomX hash rate (+10–15%).
+- Mining metrics flow into the Monitoring Stack via the `xmrig-exporter` sidecar container — no additional config needed.
+
+> [!NOTE]
+> `monerod` initial sync takes several hours to days depending on bandwidth. XMRig can be started immediately but should be pointed at a local or remote daemon that has completed sync for accurate mining.
+
+---
+
 ## Guides
 
 Detailed setup guides for the infrastructure surrounding these Docker stacks:
@@ -375,8 +409,9 @@ Detailed setup guides for the infrastructure surrounding these Docker stacks:
 | [Authelia 2FA Gateway](guide/AUTHELIA.md) | Authelia setup with YubiKey WebAuthn + TOTP backup |
 | [VPS Hardening](guide/HARDENING.md) | Fail2ban + PF firewall configuration on FreeBSD |
 | [Monitoring Stack](guide/MONITORING.md) | Grafana + Prometheus + Loki setup, dashboards, and log queries |
+| [Monero Full Node & XMRig Mining](guide/MONERO.md) | monerod setup, Ledger wallet, XMRig build & systemd config, MoneroOcean pool, Prometheus exporter |
 
-**Recommended reading order:** Network Architecture → Nginx → Authelia → Hardening → Monitoring
+**Recommended reading order:** Network Architecture → Nginx → Authelia → Hardening → Monitoring → Monero
 
 ---
 
@@ -452,6 +487,7 @@ Detailed setup guides for the infrastructure surrounding these Docker stacks:
 │   ├── MATRIX.md                       # Matrix Synapse + Element setup guide
 │   ├── MINECRAFT.md                    # Minecraft server setup guide
 │   ├── MONITORING.md                   # Monitoring stack setup guide
+│   ├── MONERO.md                       # Monero full node, Ledger wallet & XMRig guide
 │   ├── NEXTCLOUD.md                    # Nextcloud setup guide
 │   ├── NGINX.md                        # Nginx reverse proxy setup guide
 │   ├── P2P_VPN.md                      # P2P / Gluetun VPN setup guide
@@ -490,9 +526,12 @@ Detailed setup guides for the infrastructure surrounding these Docker stacks:
     ├── minecraft-server/
     │   └── docker-compose.yml              # Minecraft Java server
     ├── monitoring/
-    │   ├── docker-compose.yml              # Grafana + Prometheus + Loki stack
+    │   ├── docker-compose.yml              # Grafana + Prometheus + Loki + xmrig-exporter
+    │   ├── xmrig-exporter/
+    │   │   ├── Dockerfile                  # Alpine Python 3.12 exporter image
+    │   │   └── exporter.py                 # XMRig HTTP API → Prometheus metrics
     │   └── config/
-    │       ├── prometheus.yml              # Prometheus scrape targets
+    │       ├── prometheus.yml              # Prometheus scrape targets (incl. xmrig)
     │       ├── loki-config.yaml            # Loki storage configuration
     │       ├── promtail-config.yaml        # Promtail Docker log discovery
     │       └── grafana/
@@ -501,8 +540,10 @@ Detailed setup guides for the infrastructure surrounding these Docker stacks:
     │   └── docker-compose.yml              # Personal cloud platform
     ├── p2p-gluetun/
     │   └── docker-compose.yml              # VPN-tunneled P2P clients
-    └── trilium/
-        └── docker-compose.yml              # TriliumNext personal knowledge base
+    ├── trilium/
+    │   └── docker-compose.yml              # TriliumNext personal knowledge base
+    └── xmrig/
+        └── setup.sh                        # Automated XMRig + MoneroOcean installer
 ```
 
 ---

@@ -30,3 +30,9 @@ scrape_configs:
     static_configs:
       - targets: ["loki:3100"]
     metrics_path: /metrics
+
+  # ── XMRig Exporter (mining hashrate, shares, pool connection) ──────────
+  - job_name: "xmrig"
+    static_configs:
+      - targets: ["xmrig-exporter:9189"]
+    metrics_path: /metrics
