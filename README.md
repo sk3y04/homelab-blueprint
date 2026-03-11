@@ -1,6 +1,5 @@
-# 🏠 Homelab Blueprint
+# Homelab Blueprint
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/compose/)
 [![Services](https://img.shields.io/badge/Services-13-green.svg)](#services)
 [![Host Services](https://img.shields.io/badge/Host_Services-2-orange.svg)](#-monero-full-node--xmrig-mining)
@@ -428,7 +427,7 @@ Detailed setup guides for the infrastructure surrounding these Docker stacks:
 1. **Clone the repository:**
 
    ```bash
-   git clone https://github.com/<your-username>/homelab-blueprint.git
+   git clone https://github.com/sk3y04/homelab-blueprint.git
    cd homelab-blueprint
    ```
 
