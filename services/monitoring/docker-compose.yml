@@ -43,7 +43,7 @@ services:
       - GF_AUTH_PROXY_HEADER_NAME=Remote-User
       - GF_AUTH_PROXY_HEADER_PROPERTY=username
       - GF_AUTH_PROXY_AUTO_SIGN_UP=true
-      - GF_SERVER_ROOT_URL=https://grafana.skey.ovh
+      - GF_SERVER_ROOT_URL=${GF_SERVER_ROOT_URL:-https://grafana.example.com}
       # Allow embedding in iframes behind Authelia.
       - GF_SECURITY_ALLOW_EMBEDDING=true
 

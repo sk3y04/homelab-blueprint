@@ -122,7 +122,9 @@ All services are exposed as subdomains under `example.com`, each with its own Le
 | `adguard.example.com` | AdGuard Home | `10.8.0.2:3000` | HTTPS (HTTP/2) |
 | `matrix.example.com` | Matrix Synapse | `10.8.0.2:8008` | HTTPS (HTTP/2) |
 | `element.example.com` | Element Web | `10.8.0.2:8088` | HTTPS (HTTP/2) |
-| `grafana.example.com` | Grafana | `10.8.0.2:3100` | HTTPS (HTTP/2) |\n| `pdf.example.com` | BentoPDF | `10.8.0.2:8084` | HTTPS (HTTP/2) |
+| `auth.example.com` | Authelia | `10.8.0.2:9091` | HTTPS (HTTP/2) |
+| `grafana.example.com` | Grafana | `10.8.0.2:3100` | HTTPS (HTTP/2) |
+| `pdf.example.com` | BentoPDF | `10.8.0.2:8084` | HTTPS (HTTP/2) |
 | `notes.example.com` | TriliumNext Notes | `10.8.0.2:8085` | HTTPS (HTTP/2) |
 | `example.com` | .well-known delegation | (static JSON) | HTTPS (HTTP/2) |
 | — | Minecraft Server | `10.8.0.2:25565` | TCP (stream) |

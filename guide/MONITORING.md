@@ -33,9 +33,9 @@ Host OS           │ Node Exporter │──scrape── Prometheus ──► G
 | Requirement            | Why                                                  |
 | ---------------------- | ---------------------------------------------------- |
 | Docker & Docker Compose | Runs the five containers.                           |
-| OpenVPN tunnel active  | VPS nginx must reach `10.40.40.2:3100` (Grafana).    |
-| DNS record             | `grafana.skey.ovh` → VPS public IP.                  |
-| Let's Encrypt cert     | TLS for `grafana.skey.ovh`.                          |
+| OpenVPN tunnel active  | VPS nginx must reach `<home-server-vpn-ip>:3100` (Grafana).    |
+| DNS record             | `grafana.example.com` → VPS public IP.                  |
+| Let's Encrypt cert     | TLS for `grafana.example.com`.                          |
 
 ---
 
@@ -86,7 +86,7 @@ from your `.env`.
 
 ### Via the internet (VPS reverse proxy)
 
-Once the VPS is configured (see below), open `https://grafana.skey.ovh`.
+Once the VPS is configured (see below), open `https://grafana.example.com`.
 Authelia will prompt for 2FA before you reach Grafana.
 
 ---
@@ -101,19 +101,19 @@ Authelia will prompt for 2FA before you reach Grafana.
 Create an A record:
 
 ```
-grafana.skey.ovh  →  <VPS public IP>
+grafana.example.com  →  <VPS public IP>
 ```
 
 ### 2. Let's Encrypt certificate
 
 ```bash
 # On the VPS
-certbot certonly --webroot -w /usr/local/www -d grafana.skey.ovh
+certbot certonly --webroot -w /usr/local/www -d grafana.example.com
 ```
 
 ### 3. Nginx (`vps/nginx/conf.d/services.conf`)
 
-- **Upstream**: `grafana_upstream` → `10.40.40.2:3100`
+- **Upstream**: `grafana_upstream` → `<home-server-vpn-ip>:3100`
 - **HTTP block**: ACME challenge + redirect to HTTPS.
 - **HTTPS block**: TLS termination, Authelia `auth_request`, `proxy_pass` to
   `grafana_upstream` with WebSocket support (`Upgrade` / `Connection` headers).
@@ -121,7 +121,7 @@ certbot certonly --webroot -w /usr/local/www -d grafana.skey.ovh
 ### 4. Authelia (`services/authelia/config/configuration.yml`)
 
 ```yaml
-- domain: "grafana.skey.ovh"
+- domain: "grafana.example.com"
   policy: two_factor
 ```
 

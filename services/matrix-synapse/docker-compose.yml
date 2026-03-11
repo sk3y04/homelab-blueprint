@@ -10,8 +10,8 @@
 #   - element-web: Element Web — browser-based Matrix chat client.
 #
 # Identity:
-#   - Server name is set to the BASE domain (e.g. skey.ovh) so Matrix IDs
-#     are @user:skey.ovh. The Synapse process itself runs behind
+#   - Server name is set to the BASE domain (e.g. example.com) so Matrix IDs
+#     are @user:example.com. The Synapse process itself runs behind
 #     matrix.<domain> via .well-known delegation served by Nginx on the VPS.
 #
 # Networking:
