@@ -4,12 +4,14 @@
 # Centralised observability for the entire homelab.
 #
 # Services:
-#   - grafana:        Dashboard & visualisation UI (the only publicly exposed service).
-#   - prometheus:     Time-series metrics database; scrapes Node Exporter and any
-#                     future service exporters.
-#   - loki:           Log aggregation backend (like Prometheus, but for logs).
-#   - promtail:       Agent that ships Docker container logs to Loki.
-#   - node-exporter:  Exposes host-level CPU / RAM / disk / network metrics.
+#   - grafana:           Dashboard & visualisation UI (the only publicly exposed service).
+#   - prometheus:        Time-series metrics database; scrapes all exporters.
+#   - loki:              Log aggregation backend (like Prometheus, but for logs).
+#   - promtail:          Agent that ships Docker container logs to Loki.
+#   - node-exporter:     Exposes host-level CPU / RAM / disk / network metrics.
+#   - xmrig-exporter:    Translates XMRig JSON API into Prometheus metrics.
+#   - amdgpu-exporter:   Exposes AMD GPU metrics (utilization, VRAM, temp, power, clocks).
+#   - smartctl-exporter: Exposes drive S.M.A.R.T. metrics (temp, power-on hours, errors).
 #
 # Networking:
 #   - All five services share a private 'monitoring' bridge network so they can
@@ -19,6 +21,8 @@
 #
 # Data flow:
 #   Node Exporter ─metrics─► Prometheus ──► Grafana (dashboards)
+#   amdgpu-exporter ─metrics─► Prometheus
+#   smartctl-exporter ─metrics─► Prometheus
 #   Docker logs ──► Promtail ──► Loki ──► Grafana (log explorer)
 # --------------------------------------------------------------------------------
 
@@ -140,6 +144,10 @@ services:
 
     command:
       - "--path.rootfs=/host"
+      - "--path.sysfs=/host/sys"     # read host sysfs, not the container's /sys
+      - "--path.procfs=/host/proc"   # read host procfs, not the container's /proc
+      - "--collector.hwmon"          # CPU / MB / memory thermal sensors (lm-sensors)
+      - "--collector.mdadm"          # MD RAID array health and state
 
     pid: host
     volumes:
@@ -164,6 +172,54 @@ services:
       - TZ=${TZ}
       - XMRIG_URL=http://172.17.0.1:18088
       - EXPORTER_PORT=9189
+
+    networks:
+      - monitoring
+
+  # ── AMD GPU Exporter ────────────────────────────────────────────────────
+  # Reads GPU utilization, VRAM, temperature, power draw, fan speed, and
+  # core/memory clocks from the amdgpu sysfs interface (Radeon RX 570).
+  # Requires /sys mounted read-only from the host.
+  # Bound to 127.0.0.1 — not publicly accessible.
+  amdgpu-exporter:
+    build: ./amdgpu-exporter
+    container_name: amdgpu-exporter
+    restart: unless-stopped
+
+    ports:
+      - "127.0.0.1:${AMDGPU_EXPORTER_PORT:-9835}:9835"
+
+    environment:
+      - TZ=${TZ}
+      - SYSFS_ROOT=/host/sys
+      - AMDGPU_CARD=${AMDGPU_CARD:-}
+      - EXPORTER_PORT=9835
+
+    volumes:
+      - /sys:/host/sys:ro
+
+    networks:
+      - monitoring
+
+  # ── smartctl Exporter ──────────────────────────────────────────────────
+  # Reads S.M.A.R.T. data for every disk via smartctl and exposes
+  # temperature, power-on hours, reallocated/pending/uncorrectable sectors,
+  # and NVMe-specific wear / data-units metrics to Prometheus.
+  # Needs access to /dev and elevated capabilities to issue ATA/NVMe commands.
+  smartctl-exporter:
+    image: prometheuscommunity/smartctl-exporter:latest
+    container_name: smartctl-exporter
+    restart: unless-stopped
+    privileged: true
+
+    ports:
+      - "127.0.0.1:${SMARTCTL_EXPORTER_PORT:-9633}:9633"
+
+    environment:
+      - TZ=${TZ}
+
+    volumes:
+      - /dev:/dev
 
     networks:
       - monitoring

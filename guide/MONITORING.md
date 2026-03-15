@@ -2,15 +2,18 @@
 
 Centralised observability for the homelab. **Grafana** provides dashboards,
 **Prometheus** stores time-series metrics, **Loki** stores logs, **Promtail**
-ships Docker container logs to Loki, and **Node Exporter** exposes host-level
-CPU / RAM / disk / network statistics.
+ships Docker container logs to Loki, **Node Exporter** exposes host-level
+CPU / RAM / disk / network statistics, and **amdgpu-exporter** collects
+AMD GPU metrics via the sysfs interface (Radeon RX 570).
 
 ```
                   ┌───────────────┐
 Docker containers │   Promtail    │──push──► Loki ──────┐
                   └───────────────┘                      │
                   ┌───────────────┐                      ▼
-Host OS           │ Node Exporter │──scrape── Prometheus ──► Grafana ◄── You
+Host OS           │ Node Exporter │──scrape─┐
+Host OS (sysfs)   │amdgpu-exporter│──scrape─├─► Prometheus ──► Grafana ◄── You
+/dev (S.M.A.R.T.) │smartctl-exporter│─scrape─┘
                   └───────────────┘
 ```
 
@@ -53,7 +56,7 @@ mkdir -p "$MONITORING_DATA_DIR"/{prometheus,loki,promtail}
 # 3. Start the stack
 docker compose up -d
 
-# 4. Check that all five containers are healthy
+# 4. Check that all containers are healthy
 docker compose ps
 ```
 
@@ -74,6 +77,9 @@ Grafana is now running on `http://localhost:3100`.
 | `PROMETHEUS_PORT`            | `9090`       | Host port for Prometheus (127.0.0.1 only).         |
 | `LOKI_PORT`                  | `3101`       | Host port for Loki (127.0.0.1 only).               |
 | `NODE_EXPORTER_PORT`         | `9100`       | Host port for Node Exporter (127.0.0.1 only).      |
+| `AMDGPU_EXPORTER_PORT`       | `9835`       | Host port for AMD GPU Exporter (127.0.0.1 only).   |
+| `AMDGPU_CARD`                | *(auto)*     | Force a specific card, e.g. `card0`. Auto-detected by default. |
+| `SMARTCTL_EXPORTER_PORT`     | `9633`       | Host port for smartctl S.M.A.R.T. Exporter (127.0.0.1 only). |
 
 ---
 
@@ -176,6 +182,30 @@ nginx -t && service nginx reload
 
 # Network received bytes/sec
 rate(node_network_receive_bytes_total{device="eth0"}[5m])
+
+# GPU core utilization %
+amdgpu_gpu_utilization_percent
+
+# VRAM used %
+amdgpu_vram_used_bytes / amdgpu_vram_total_bytes * 100
+
+# GPU die temperature (°C)
+amdgpu_temperature_celsius
+
+# GPU average power draw (watts)
+amdgpu_power_average_watts
+
+# All hwmon thermal sensors (CPU, MB, memory)
+node_hwmon_temp_celsius
+
+# Drive temperature for all disks
+smartctl_device_temperature{temperature_type="current"}
+
+# Drive power-on hours (lifetime)
+smartctl_device_power_on_seconds / 3600
+
+# MD RAID array health (1 = active)
+node_md_state
 ```
 
 ### Recommended Dashboards

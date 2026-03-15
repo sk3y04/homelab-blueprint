@@ -273,7 +273,7 @@ fi
 
 cat > "${CONFIG_FILE}" <<EOF
 {
-    "autosave": true,
+    "autosave": false,
     "cpu": {
         "enabled": true,
         "huge-pages": true,
