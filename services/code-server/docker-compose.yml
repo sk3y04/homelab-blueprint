@@ -15,7 +15,7 @@
 services:
   # Browser-based VS Code instance for remote development.
   code-server:
-    image: linuxserver/code-server:4.107.0
+    image: linuxserver/code-server:4.111.0
     container_name: code-server
 
     # Run code-server under the specified user/group and timezone; configure
