@@ -3,8 +3,10 @@
 Centralised observability for the homelab. **Grafana** provides dashboards,
 **Prometheus** stores time-series metrics, **Loki** stores logs, **Promtail**
 ships Docker container logs to Loki, **Node Exporter** exposes host-level
-CPU / RAM / disk / network statistics, and **amdgpu-exporter** collects
-AMD GPU metrics via the sysfs interface (Radeon RX 570).
+CPU / RAM / disk / network statistics, and **nvidia-smi-exporter** collects
+NVIDIA GPU metrics via `nvidia-smi` (RTX 3090 / Ampere): utilization, VRAM,
+temperature, power draw, clocks, P-state, throttle reasons, NVENC/NVDEC
+sessions, and ECC errors.
 
 ```
                   ┌───────────────┐
@@ -12,7 +14,7 @@ Docker containers │   Promtail    │──push──► Loki ─────�
                   └───────────────┘                      │
                   ┌───────────────┐                      ▼
 Host OS           │ Node Exporter │──scrape─┐
-Host OS (sysfs)   │amdgpu-exporter│──scrape─├─► Prometheus ──► Grafana ◄── You
+NVIDIA runtime    │nvidia-smi-exporter│scrape─├─► Prometheus ──► Grafana ◄── You
 /dev (S.M.A.R.T.) │smartctl-exporter│─scrape─┘
                   └───────────────┘
 ```
@@ -33,12 +35,42 @@ Host OS (sysfs)   │amdgpu-exporter│──scrape─├─► Prometheus ─�
 
 ## Prerequisites
 
-| Requirement            | Why                                                  |
-| ---------------------- | ---------------------------------------------------- |
-| Docker & Docker Compose | Runs the five containers.                           |
-| OpenVPN tunnel active  | VPS nginx must reach `<home-server-vpn-ip>:3100` (Grafana).    |
-| DNS record             | `grafana.example.com` → VPS public IP.                  |
-| Let's Encrypt cert     | TLS for `grafana.example.com`.                          |
+| Requirement              | Why                                                                 |
+| ------------------------ | ------------------------------------------------------------------- |
+| Docker & Docker Compose  | Runs all monitoring containers.                                     |
+| NVIDIA Container Toolkit | Exposes the RTX 3090 to Docker containers (exporter + Jellyfin).   |
+| OpenVPN tunnel active    | VPS nginx must reach `<home-server-vpn-ip>:3100` (Grafana).        |
+| DNS record               | `grafana.example.com` → VPS public IP.                              |
+| Let's Encrypt cert       | TLS for `grafana.example.com`.                                      |
+
+### Installing the NVIDIA Container Toolkit (host)
+
+Required once on the bare-metal host before starting the stack.
+
+```bash
+# Add the NVIDIA package repository
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey \
+  | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+
+curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list \
+  | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' \
+  | sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+
+# Install
+sudo apt-get update
+sudo apt-get install -y nvidia-container-toolkit
+
+# Register the NVIDIA runtime with Docker and restart
+sudo nvidia-ctk runtime configure --runtime=docker
+sudo systemctl restart docker
+
+# Verify — should print RTX 3090 info
+docker run --rm --gpus all nvidia/cuda:12.6.3-base-ubuntu22.04 nvidia-smi
+```
+
+> **Docker Compose GPU syntax** — This stack uses the canonical
+> `deploy.resources.reservations.devices` block (not the invalid `gpus: all`
+> shorthand). Both nvidia-smi-exporter and Jellyfin request the GPU this way.
 
 ---
 
@@ -77,9 +109,9 @@ Grafana is now running on `http://localhost:3100`.
 | `PROMETHEUS_PORT`            | `9090`       | Host port for Prometheus (127.0.0.1 only).         |
 | `LOKI_PORT`                  | `3101`       | Host port for Loki (127.0.0.1 only).               |
 | `NODE_EXPORTER_PORT`         | `9100`       | Host port for Node Exporter (127.0.0.1 only).      |
-| `AMDGPU_EXPORTER_PORT`       | `9835`       | Host port for AMD GPU Exporter (127.0.0.1 only).   |
-| `AMDGPU_CARD`                | *(auto)*     | Force a specific card, e.g. `card0`. Auto-detected by default. |
-| `SMARTCTL_EXPORTER_PORT`     | `9633`       | Host port for smartctl S.M.A.R.T. Exporter (127.0.0.1 only). |
+| `NVIDIA_SMI_EXPORTER_PORT`   | `9835`       | Host port for the NVIDIA GPU Exporter (127.0.0.1 only).            |
+| `NVIDIA_VISIBLE_DEVICES`     | `all`        | GPUs exposed to the exporter container (`all`, `0`, GPU UUID, etc.) |
+| `SMARTCTL_EXPORTER_PORT`     | `9633`       | Host port for smartctl S.M.A.R.T. Exporter (127.0.0.1 only).      |
 
 ---
 
@@ -183,18 +215,40 @@ nginx -t && service nginx reload
 # Network received bytes/sec
 rate(node_network_receive_bytes_total{device="eth0"}[5m])
 
+# ── NVIDIA RTX 3090 ────────────────────────────────────────────────────────
+
 # GPU core utilization %
-amdgpu_gpu_utilization_percent
+nvidia_gpu_utilization_percent
 
 # VRAM used %
-amdgpu_vram_used_bytes / amdgpu_vram_total_bytes * 100
+nvidia_vram_used_bytes / nvidia_vram_total_bytes * 100
 
 # GPU die temperature (°C)
-amdgpu_temperature_celsius
+nvidia_temperature_celsius
 
-# GPU average power draw (watts)
-amdgpu_power_average_watts
+# GPU power draw vs TDP limit (watts)
+nvidia_power_draw_watts
+nvidia_power_limit_watts
 
+# Performance state (0 = P0 full speed, 8 = P8 idle)
+nvidia_pstate
+
+# Any throttle reason active? (1 = throttled)
+nvidia_throttle_hw_slowdown
+nvidia_throttle_hw_thermal_slowdown
+nvidia_throttle_hw_power_brake
+nvidia_throttle_sw_thermal_slowdown
+nvidia_throttle_sw_power_cap
+
+# Jellyfin NVENC/NVDEC hardware transcode sessions
+nvidia_encoder_sessions
+nvidia_decoder_sessions
+
+# ECC errors since last driver load (N/A if ECC disabled on consumer GPU)
+nvidia_ecc_corrected_volatile
+nvidia_ecc_uncorrected_volatile
+
+# ── Thermal sensors (host, via Node Exporter) ──────────────────────────────
 # All hwmon thermal sensors (CPU, MB, memory)
 node_hwmon_temp_celsius
 
@@ -210,12 +264,15 @@ node_md_state
 
 ### Recommended Dashboards
 
-Import these from [grafana.com/dashboards](https://grafana.com/grafana/dashboards/):
+The `nvidia-gpu.json` dashboard is **already provisioned** automatically — it
+appears in Grafana under **Homelab → NVIDIA GPU — RTX 3090** on first start.
 
-| Dashboard ID | Name                     | Purpose                        |
-| ------------ | ------------------------ | ------------------------------ |
-| **1860**     | Node Exporter Full       | Complete host metrics overview |
-| **13639**    | Loki & Promtail          | Docker container log dashboard |
+Additionally import these from [grafana.com/dashboards](https://grafana.com/grafana/dashboards/):
+
+| Dashboard ID | Name                     | Purpose                                            |
+| ------------ | ------------------------ | -------------------------------------------------- |
+| **1860**     | Node Exporter Full       | Complete host CPU / RAM / disk / network overview  |
+| **13639**    | Loki & Promtail          | Docker container log dashboard                     |
 
 To import: **Dashboards → New → Import → Enter ID → Load → Select data source → Import**.
 

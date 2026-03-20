@@ -37,10 +37,10 @@ scrape_configs:
       - targets: ["xmrig-exporter:9189"]
     metrics_path: /metrics
 
-  # ── AMD GPU Exporter (utilization, VRAM, temperature, power, clocks) ───
-  - job_name: "amdgpu"
+  # ── NVIDIA GPU Exporter (utilization, VRAM, temperature, power, clocks) ─
+  - job_name: "nvidia-gpu"
     static_configs:
-      - targets: ["amdgpu-exporter:9835"]
+      - targets: ["nvidia-smi-exporter:9835"]
     metrics_path: /metrics
 
   # ── smartctl Exporter (drive S.M.A.R.T.: temp, hours, errors, NVMe wear)

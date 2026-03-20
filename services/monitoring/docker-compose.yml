@@ -9,9 +9,9 @@
 #   - loki:              Log aggregation backend (like Prometheus, but for logs).
 #   - promtail:          Agent that ships Docker container logs to Loki.
 #   - node-exporter:     Exposes host-level CPU / RAM / disk / network metrics.
-#   - xmrig-exporter:    Translates XMRig JSON API into Prometheus metrics.
-#   - amdgpu-exporter:   Exposes AMD GPU metrics (utilization, VRAM, temp, power, clocks).
-#   - smartctl-exporter: Exposes drive S.M.A.R.T. metrics (temp, power-on hours, errors).
+#   - xmrig-exporter:     Translates XMRig JSON API into Prometheus metrics.
+#   - nvidia-smi-exporter: Exposes NVIDIA GPU metrics (utilization, VRAM, temp, power, clocks).
+#   - smartctl-exporter:  Exposes drive S.M.A.R.T. metrics (temp, power-on hours, errors).
 #
 # Networking:
 #   - All five services share a private 'monitoring' bridge network so they can
@@ -21,7 +21,7 @@
 #
 # Data flow:
 #   Node Exporter ─metrics─► Prometheus ──► Grafana (dashboards)
-#   amdgpu-exporter ─metrics─► Prometheus
+#   nvidia-smi-exporter ─metrics─► Prometheus
 #   smartctl-exporter ─metrics─► Prometheus
 #   Docker logs ──► Promtail ──► Loki ──► Grafana (log explorer)
 # --------------------------------------------------------------------------------
@@ -176,27 +176,38 @@ services:
     networks:
       - monitoring
 
-  # ── AMD GPU Exporter ────────────────────────────────────────────────────
-  # Reads GPU utilization, VRAM, temperature, power draw, fan speed, and
-  # core/memory clocks from the amdgpu sysfs interface (Radeon RX 570).
-  # Requires /sys mounted read-only from the host.
+  # ── NVIDIA GPU Exporter ────────────────────────────────────────────────
+  # Reads GPU utilization, VRAM, temperature, power draw, fan speed, clocks,
+  # throttle reasons, P-state, and encoder/decoder sessions via nvidia-smi
+  # (RTX 3090 / Ampere). Requires the NVIDIA Container Toolkit on the host.
   # Bound to 127.0.0.1 — not publicly accessible.
-  amdgpu-exporter:
-    build: ./amdgpu-exporter
-    container_name: amdgpu-exporter
+  nvidia-smi-exporter:
+    build: ./nvidia-smi-exporter
+    container_name: nvidia-smi-exporter
     restart: unless-stopped
+    # Explicitly use the NVIDIA container runtime so the toolkit injects
+    # nvidia-smi and the device files regardless of Docker daemon defaults.
+    runtime: nvidia
+
+    # Canonical GPU device request for Docker Compose v2 standalone.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu, utility]
 
     ports:
-      - "127.0.0.1:${AMDGPU_EXPORTER_PORT:-9835}:9835"
+      - "127.0.0.1:${NVIDIA_SMI_EXPORTER_PORT:-9836}:9835"
 
     environment:
       - TZ=${TZ}
-      - SYSFS_ROOT=/host/sys
-      - AMDGPU_CARD=${AMDGPU_CARD:-}
       - EXPORTER_PORT=9835
-
-    volumes:
-      - /sys:/host/sys:ro
+      # Expose all GPUs; override with a UUID or index (e.g. "0") to pin one.
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+      # Only the utility capability is needed for nvidia-smi queries.
+      - NVIDIA_DRIVER_CAPABILITIES=utility
 
     networks:
       - monitoring

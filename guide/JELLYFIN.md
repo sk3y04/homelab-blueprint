@@ -22,7 +22,7 @@ Jellyfin is a Free Software Media System that puts you in control of managing an
 Run Jellyfin with hardware transcoding.
 
 - **Web UI:** Port `8096` (HTTP) - Use HTTPS behind a reverse proxy.
-- **Hardware Acceleration:** `/dev/dri` (GPU pass-through)
+- **Hardware Acceleration:** NVIDIA Container Toolkit (`gpus: all`, NVENC/NVDEC)
 
 ---
 
@@ -41,6 +41,7 @@ Add a DNS record for the Jellyfin instance:
 See [services/jellyfin/docker-compose.yml](../services/jellyfin/docker-compose.yml).
 
 Ensure you have a `.env` file with the necessary variables (`JELLYFIN_HTTP_PORT`, `MEDIA_ROOT_DIR`).
+Install the NVIDIA Container Toolkit on the host first so Jellyfin can access the RTX 3090 from Docker.
 
 ---
 
@@ -50,7 +51,7 @@ Ensure you have a `.env` file with the necessary variables (`JELLYFIN_HTTP_PORT`
 2. **First Run Setup:**
    - Create admin username/password.
    - Add media libraries (Movies, TV Shows, Music).
-   - Enable hardware transcoding in **Dashboard -> Playback -> Transcoding** settings.
+    - Enable `NVIDIA NVENC` / `NVIDIA NVDEC` in **Dashboard -> Playback -> Transcoding** settings.
    - Configure language and country.
 
 ---

@@ -12,7 +12,7 @@
 #   - Exposes port 8096 for HTTP access (typically behind a reverse proxy).
 #
 # Hardware Acceleration:
-#   - Maps /dev/dri for hardware transcoding support (Intel QuickSync / AMD VAAPI).
+#   - Uses the NVIDIA Container Toolkit for NVENC/NVDEC hardware transcoding.
 # --------------------------------------------------------------------------------
 
 services:
@@ -33,6 +33,8 @@ services:
     environment:
       - TZ=${TZ}
       - JELLYFIN_PublishedServerUrl=${JELLYFIN_PUBLISHED_SERVER_URL}
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+      - NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES:-compute,video,utility}
 
     # Persist Jellyfin configuration/cache and mount the media library.
     volumes:
@@ -41,9 +43,15 @@ services:
       - ${MEDIA_ROOT_DIR}:/media
       - ${TMP_DIR}:/tmp
 
-    # Hardware acceleration for transcoding using host GPU (DRI devices).
-    devices:
-      - /dev/dri:/dev/dri
+    # Canonical GPU device request for Docker Compose v2.
+    # Grants NVENC/NVDEC (video) and CUDA (compute) access for hardware transcoding.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu, utility, video, compute]
 
 networks:
   # Dedicated bridge network for media-related containers.

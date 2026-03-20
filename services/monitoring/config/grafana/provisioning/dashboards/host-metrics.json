@@ -12,7 +12,7 @@
       }
     ]
   },
-  "description": "Host-level metrics — CPU, memory, disk, network, thermal sensors, drive S.M.A.R.T., MD RAID, and GPU (AMD Radeon RX 570).",
+  "description": "Host-level metrics — CPU, memory, disk, network, thermal sensors, drive S.M.A.R.T., MD RAID, and GPU (NVIDIA RTX 3090).",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -641,7 +641,7 @@
       "collapsed": false,
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 43 },
       "id": 105,
-      "title": "GPU (AMD Radeon RX 570)",
+      "title": "GPU (NVIDIA RTX 3090)",
       "type": "row"
     },
     {
@@ -677,7 +677,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "amdgpu_gpu_utilization_percent",
+          "expr": "nvidia_gpu_utilization_percent",
           "legendFormat": "GPU %",
           "refId": "A"
         }
@@ -716,7 +716,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "amdgpu_vram_used_bytes / amdgpu_vram_total_bytes * 100",
+          "expr": "nvidia_vram_used_bytes / nvidia_vram_total_bytes * 100",
           "legendFormat": "VRAM %",
           "refId": "A"
         }
@@ -754,7 +754,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "amdgpu_temperature_celsius",
+          "expr": "nvidia_temperature_celsius",
           "legendFormat": "Temp",
           "refId": "A"
         }
@@ -769,8 +769,8 @@
             "mode": "absolute",
             "steps": [
               { "color": "green", "value": null },
-              { "color": "yellow", "value": 130 },
-              { "color": "red", "value": 160 }
+              { "color": "yellow", "value": 250 },
+              { "color": "red", "value": 330 }
             ]
           },
           "unit": "watt"
@@ -791,7 +791,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "amdgpu_power_average_watts",
+          "expr": "nvidia_power_draw_watts",
           "legendFormat": "Power",
           "refId": "A"
         }
@@ -827,7 +827,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "amdgpu_gpu_clock_hz",
+          "expr": "nvidia_gpu_clock_hz",
           "legendFormat": "Core Clock",
           "refId": "A"
         }
@@ -844,7 +844,7 @@
               { "color": "text", "value": null }
             ]
           },
-          "unit": "rotrpm",
+          "unit": "percent",
           "decimals": 0
         },
         "overrides": []
@@ -863,8 +863,8 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "amdgpu_fan_speed_rpm",
-          "legendFormat": "RPM",
+          "expr": "nvidia_fan_speed_percent",
+          "legendFormat": "Fan %",
           "refId": "A"
         }
       ]
@@ -897,19 +897,19 @@
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 50 },
       "id": 60,
       "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
-      "title": "GPU & Memory Controller Utilization",
+      "title": "GPU & Memory Utilization",
       "type": "timeseries",
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "amdgpu_gpu_utilization_percent",
+          "expr": "nvidia_gpu_utilization_percent",
           "legendFormat": "GPU Core %",
           "refId": "A"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "amdgpu_mem_utilization_percent",
-          "legendFormat": "Memory Controller %",
+          "expr": "nvidia_mem_utilization_percent",
+          "legendFormat": "Memory %",
           "refId": "B"
         }
       ]
@@ -945,13 +945,13 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "amdgpu_vram_total_bytes",
+          "expr": "nvidia_vram_total_bytes",
           "legendFormat": "VRAM Total",
           "refId": "A"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "amdgpu_vram_used_bytes",
+          "expr": "nvidia_vram_used_bytes",
           "legendFormat": "VRAM Used",
           "refId": "B"
         }
@@ -988,15 +988,9 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "amdgpu_temperature_celsius",
+          "expr": "nvidia_temperature_celsius",
           "legendFormat": "Temperature (°C)",
           "refId": "A"
-        },
-        {
-          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "amdgpu_temperature_crit_celsius",
-          "legendFormat": "Critical Limit (°C)",
-          "refId": "B"
         }
       ]
     },
@@ -1031,14 +1025,14 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "amdgpu_power_average_watts",
+          "expr": "nvidia_power_draw_watts",
           "legendFormat": "Power Draw (W)",
           "refId": "A"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "amdgpu_power_cap_watts",
-          "legendFormat": "Power Cap (W)",
+          "expr": "nvidia_power_limit_watts",
+          "legendFormat": "Power Limit (W)",
           "refId": "B"
         }
       ]
@@ -1695,7 +1689,7 @@
     }
   ],
   "schemaVersion": 39,
-  "tags": ["node-exporter", "prometheus", "homelab", "amdgpu", "smart"],
+  "tags": ["node-exporter", "prometheus", "homelab", "nvidia", "smart"],
   "templating": {
     "list": [
       {

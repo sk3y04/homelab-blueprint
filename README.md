@@ -62,7 +62,7 @@ This repository contains production-ready Docker Compose stacks that I use daily
 | **OS** | Rocky Linux 10 (Red Quartz) x86_64 |
 | **CPU** | Intel Xeon E5-2697 v4 — 18 cores / 36 threads @ 2.3 GHz (Turbo 3.6 GHz) |
 | **RAM** | 64 GB DDR4 ECC |
-| **GPU** | AMD Radeon RX 570 4 GB (hardware transcoding) |
+| **GPU** | NVIDIA RTX 3090 24 GB (NVENC/NVDEC hardware transcoding) |
 | **Storage** | 70 GB `/` (xfs) · 390 GB `/home` (xfs) · 12 TB RAID6 (xfs) · 3 TB RAID1 (xfs LUKS encrypted) |
 
 ### ☁️ FreeBSD VPS (Reverse Proxy)
@@ -90,7 +90,7 @@ This repository contains production-ready Docker Compose stacks that I use daily
 | **Purpose** | Free and open-source media streaming server |
 | **Port** | `8096` (HTTP) |
 
-- Hardware transcoding support via `/dev/dri` passthrough (Intel QSV / AMD VAAPI).
+- Hardware transcoding support via NVIDIA Container Toolkit (NVENC/NVDEC).
 - Media library mounted read-only from host storage.
 - Runs on a dedicated `media_internal` bridge network.
 
