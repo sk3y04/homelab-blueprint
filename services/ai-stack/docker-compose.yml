@@ -1,0 +1,211 @@
+# --------------------------------------------------------------------------------
+# AI Stack — Ollama + Open WebUI + OpenClaw + DCGM Exporter
+# --------------------------------------------------------------------------------
+# Local LLM inference stack for an NVIDIA RTX 3090 24 GB.
+#
+# Services:
+#   - ollama:          Local LLM runtime (GPU-accelerated).
+#   - open-webui:      Web UI for chatting with local models.
+#   - openclaw:        Agent layer with OpenAI-compatible backend.
+#   - dcgm-exporter:   NVIDIA GPU metrics exporter for Prometheus.
+#
+# Monitoring:
+#   DCGM exporter joins the existing 'monitoring' network so the homelab
+#   Prometheus (services/monitoring) scrapes it directly. No separate
+#   Prometheus or Grafana instance — dashboards live in the existing
+#   Grafana provisioning directory.
+#
+# Networking:
+#   - AI services share a private 'ai-stack' bridge network and communicate
+#     by container name (e.g. open-webui → ollama:11434).
+#   - dcgm-exporter also joins the external 'monitoring' network.
+#   - Host ports are bound to 127.0.0.1 — not exposed to the network.
+#
+# GPU access:
+#   - Only ollama and dcgm-exporter receive GPU device reservations.
+#   - All other services are CPU-only.
+#
+# Usage:
+#   cp .env.example .env   # edit secrets and paths
+#   docker compose up -d
+# --------------------------------------------------------------------------------
+
+services:
+  # ── Ollama — Local LLM Runtime ──────────────────────────────────────────
+  # Serves models via REST API on port 11434.
+  # Models are stored persistently in ${AI_DATA_DIR}/ollama.
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ai-ollama
+    restart: unless-stopped
+
+    ports:
+      - "127.0.0.1:${OLLAMA_PORT:-11434}:11434"
+
+    environment:
+      - TZ=${TZ}
+      # Only keep 1 model loaded — the 3090 cannot hold two 32B models.
+      - OLLAMA_MAX_LOADED_MODELS=${OLLAMA_MAX_LOADED_MODELS:-1}
+      # Parallel request slots — conservative to avoid OOM with large models.
+      - OLLAMA_NUM_PARALLEL=${OLLAMA_NUM_PARALLEL:-2}
+      # Enable flash attention for faster inference and lower VRAM usage.
+      - OLLAMA_FLASH_ATTENTION=1
+      # Allow connections from other containers on the Docker network.
+      - OLLAMA_HOST=0.0.0.0
+
+    volumes:
+      - ${AI_DATA_DIR}/ollama:/root/.ollama
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu, utility]
+
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:11434/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+
+    networks:
+      - ai-stack
+
+  # ── Open WebUI — Chat Interface ─────────────────────────────────────────
+  # Full-featured web UI for interacting with Ollama models.
+  # Stores chat history, user accounts, and settings in a local SQLite DB.
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: ai-open-webui
+    restart: unless-stopped
+
+    depends_on:
+      ollama:
+        condition: service_healthy
+
+    ports:
+      - "127.0.0.1:${OPEN_WEBUI_PORT:-8080}:8080"
+
+    environment:
+      - TZ=${TZ}
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - WEBUI_SECRET_KEY=${OPEN_WEBUI_SECRET_KEY}
+      # Disable telemetry.
+      - SCARF_NO_ANALYTICS=true
+      - DO_NOT_TRACK=true
+      # Disable signup after first admin account is created.
+      - ENABLE_SIGNUP=${OPEN_WEBUI_ENABLE_SIGNUP:-false}
+
+    volumes:
+      - ${AI_DATA_DIR}/open-webui:/app/backend/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+    networks:
+      - ai-stack
+
+  # ── OpenClaw — Agent Layer ──────────────────────────────────────────────
+  # AI agent framework connected to Ollama via OpenAI-compatible API.
+  # Prepares the path for Discord integration and persona models.
+  #
+  # ╔══════════════════════════════════════════════════════════════════════╗
+  # ║  IMAGE VERIFICATION REQUIRED                                       ║
+  # ║  The image below is a best-guess. Before first startup, verify     ║
+  # ║  the correct image name and tag:                                   ║
+  # ║    docker search openclaw                                          ║
+  # ║    # or check: https://github.com/openclaw                        ║
+  # ║  If the image does not exist, comment out this service and use     ║
+  # ║  Open WebUI's built-in agent/tool features as an interim.         ║
+  # ╚══════════════════════════════════════════════════════════════════════╝
+  openclaw:
+    image: ${OPENCLAW_IMAGE:-openclaw/openclaw:latest}
+    container_name: ai-openclaw
+    restart: unless-stopped
+
+    depends_on:
+      ollama:
+        condition: service_healthy
+
+    ports:
+      - "127.0.0.1:${OPENCLAW_PORT:-8081}:8080"
+
+    environment:
+      - TZ=${TZ}
+      # Point to Ollama's OpenAI-compatible endpoint.
+      - OPENAI_API_BASE=http://ollama:11434/v1
+      - OPENAI_API_KEY=not-needed
+      - DEFAULT_MODEL=${OPENCLAW_DEFAULT_MODEL:-qwen3:32b}
+      - CONFIG_PATH=/config/config.yaml
+
+    volumes:
+      - ${AI_DATA_DIR}/openclaw:/data
+      - ./config/openclaw:/config:ro
+
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+    networks:
+      - ai-stack
+
+  # ── DCGM Exporter — GPU Metrics ─────────────────────────────────────────
+  # Exposes NVIDIA GPU metrics (utilization, VRAM, temperature, power,
+  # clocks) in Prometheus format on port 9400.
+  # Joins the external 'monitoring' network so the homelab Prometheus
+  # (services/monitoring) can scrape it by container name.
+  #
+  # Note: On consumer GPUs (GeForce/RTX), some datacenter-specific DCGM
+  # metrics may be unavailable. Core metrics (utilization, memory, temp,
+  # power, clocks) work reliably. If DCGM fails to start on your GPU,
+  # see the troubleshooting section in guide/AI_STACK.md for alternatives.
+  dcgm-exporter:
+    image: nvidia/dcgm-exporter:3.3.9-3.6.1-ubuntu22.04
+    container_name: ai-dcgm-exporter
+    restart: unless-stopped
+
+    ports:
+      - "127.0.0.1:${DCGM_EXPORTER_PORT:-9400}:9400"
+
+    environment:
+      - TZ=${TZ}
+
+    cap_add:
+      - SYS_ADMIN
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu, utility]
+
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9400/metrics || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+    networks:
+      - ai-stack
+      - monitoring
+
+networks:
+  ai-stack:
+    name: ai-stack
+    driver: bridge
+  # Join the existing monitoring network created by services/monitoring.
+  monitoring:
+    external: true

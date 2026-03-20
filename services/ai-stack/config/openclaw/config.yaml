@@ -1,0 +1,72 @@
+# ==========================================================================
+# OpenClaw — Local Agent Configuration
+# ==========================================================================
+# This is a safe default config for local-only deployment.
+# OpenClaw connects to Ollama's OpenAI-compatible API on the Docker network.
+#
+# To switch models, change default_model below. After training a LoRA
+# persona model and creating it in Ollama (see Modelfile.persona.example),
+# set default_model to your custom model name (e.g. "persona:latest").
+# ==========================================================================
+
+# ── LLM Backend ──────────────────────────────────────────────────────────
+llm:
+  provider: openai
+  base_url: http://ollama:11434/v1
+  api_key: "not-needed"
+  default_model: qwen3:32b
+  # Timeout for inference requests (seconds). Large models on a 3090 may
+  # need up to 120s for long contexts.
+  timeout: 120
+  # Max tokens per response.
+  max_tokens: 4096
+  temperature: 0.7
+
+# ── Agent Defaults ────────────────────────────────────────────────────────
+agent:
+  # System prompt for general agent behavior.
+  system_prompt: |
+    You are a helpful AI assistant running locally on a home server.
+    Be concise, accurate, and honest. If you are unsure, say so.
+  # Max conversation history turns to keep in context.
+  max_history: 20
+
+# ── Available Models ──────────────────────────────────────────────────────
+# Define named model aliases for quick switching.
+models:
+  general:
+    name: qwen3:32b
+    description: "General-purpose reasoning (Q4_K_M, ~20 GB VRAM)"
+  coding:
+    name: qwen3-coder:14b
+    description: "Code generation and review (Q5_K_M, ~11 GB VRAM)"
+  persona:
+    # Placeholder — uncomment after creating the LoRA persona model.
+    # name: persona:latest
+    # description: "Custom LoRA persona (Discord voice clone)"
+    name: qwen3:14b
+    description: "Base model for future LoRA fine-tune"
+
+# ── Integrations ──────────────────────────────────────────────────────────
+# All integrations are disabled by default for local-only deployment.
+integrations:
+  discord:
+    enabled: false
+    # Uncomment and fill in when ready to connect to Discord:
+    # bot_token: ""
+    # guild_ids: []
+    # channel_ids: []
+    # model: persona:latest
+    # prefix: "!"
+
+# ── Server ────────────────────────────────────────────────────────────────
+server:
+  host: 0.0.0.0
+  port: 8080
+  # Bind to all interfaces inside the container; the compose file
+  # restricts host exposure to 127.0.0.1.
+
+# ── Logging ───────────────────────────────────────────────────────────────
+logging:
+  level: info
+  format: json

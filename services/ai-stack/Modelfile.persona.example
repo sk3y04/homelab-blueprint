@@ -1,0 +1,36 @@
+# ==========================================================================
+# Ollama Modelfile — LoRA Persona Model (Example)
+# ==========================================================================
+# This Modelfile creates a custom model from a LoRA adapter trained on
+# your Discord conversations. It uses qwen3:14b as the base model.
+#
+# Prerequisites:
+#   1. Train a LoRA adapter using your conversation data.
+#   2. Export the adapter to GGUF format (e.g. with llama.cpp's
+#      convert_lora_to_gguf.py).
+#   3. Place the adapter file at:
+#      /opt/ai-stack/data/lora-adapters/persona-adapter.gguf
+#   4. Create the model in Ollama:
+#      docker exec ai-ollama ollama create persona -f /models/Modelfile.persona
+#
+# To use this Modelfile, mount it into the Ollama container. Add this
+# volume to docker-compose.yml under the ollama service:
+#   - ./Modelfile.persona:/models/Modelfile.persona:ro
+#   - /opt/ai-stack/data/lora-adapters:/lora-adapters:ro
+# ==========================================================================
+
+FROM qwen3:14b
+
+ADAPTER /lora-adapters/persona-adapter.gguf
+
+PARAMETER temperature 0.8
+PARAMETER top_p 0.9
+PARAMETER top_k 40
+PARAMETER repeat_penalty 1.1
+PARAMETER num_ctx 8192
+
+SYSTEM """
+You are a persona model trained on real conversation data. Match the
+writing style, tone, and personality of the training data. Be natural,
+authentic, and conversational.
+"""
