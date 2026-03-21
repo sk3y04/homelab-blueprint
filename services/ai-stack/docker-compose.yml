@@ -20,7 +20,8 @@
 #   - AI services share a private 'ai-stack' bridge network and communicate
 #     by container name (e.g. open-webui → ollama:11434).
 #   - dcgm-exporter also joins the external 'monitoring' network.
-#   - Host ports are bound to 127.0.0.1 — not exposed to the network.
+#   - Browser-facing UIs (Open WebUI, OpenCode) publish on the host.
+#   - Ollama, OpenClaw, and DCGM Exporter remain bound to 127.0.0.1.
 #
 # GPU access:
 #   - Only ollama and dcgm-exporter receive GPU device reservations.
@@ -90,7 +91,7 @@ services:
         condition: service_healthy
 
     ports:
-      - "127.0.0.1:${OPEN_WEBUI_PORT:-8080}:8080"
+      - "${OPEN_WEBUI_PORT:-8080}:8080"
 
     environment:
       - TZ=${TZ}
@@ -134,7 +135,7 @@ services:
     command: ["web", "--hostname=0.0.0.0", "--port=4096"]
 
     ports:
-      - "127.0.0.1:${OPENCODE_PORT:-4096}:4096"
+      - "${OPENCODE_PORT:-4096}:4096"
 
     environment:
       - TZ=${TZ}

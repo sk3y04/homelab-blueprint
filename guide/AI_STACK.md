@@ -80,12 +80,12 @@ and promotion commands, see `services/ai-stack/scripts/README.md`.
          ├── dcgm-exporter also joins ─► monitoring network (external)
          │                                  └── prometheus scrapes it
          │
-         └── Host ports (all 127.0.0.1):
-               :11434  Ollama API
-               :8080   Open WebUI
-             :4096   OpenCode
-               :8081   OpenClaw
-               :9400   DCGM Exporter
+           └── Host ports:
+             :8080             Open WebUI      (host-published)
+             :4096             OpenCode        (host-published)
+             127.0.0.1:11434   Ollama API
+             127.0.0.1:8081    OpenClaw
+             127.0.0.1:9400    DCGM Exporter
 ```
 
 ### Persistent storage layout
@@ -290,7 +290,8 @@ docker exec ai-ollama ollama pull qwen3:32b
 docker exec ai-ollama ollama pull qwen3:14b
 
 # 5. Open WebUI — create your admin account
-# Open http://127.0.0.1:8080 in a browser.
+# Open http://HOST_IP:8080 in a browser.
+# Local access on the Docker host still works via http://127.0.0.1:8080.
 # First start note: Open WebUI will run SQLite migrations and may download its
 # default embedding model (`sentence-transformers/all-MiniLM-L6-v2`). That can
 # take a few minutes and produces noisy logs such as `Running upgrade ...`,
@@ -301,7 +302,8 @@ docker exec ai-ollama ollama pull qwen3:14b
 # and restart: docker compose up -d open-webui
 
 # 6. OpenCode — browser-based coding agent
-# Open http://127.0.0.1:4096 in a browser.
+# Open http://HOST_IP:4096 in a browser.
+# Local access on the Docker host still works via http://127.0.0.1:4096.
 # Log in with:
 #   username: OPENCODE_SERVER_USERNAME
 #   password: OPENCODE_SERVER_PASSWORD
@@ -679,8 +681,18 @@ The `profiles: ["training"]` key ensures it never starts during normal `docker c
 
 ### Port binding
 
-All services bind to `127.0.0.1` — nothing is exposed to the LAN or internet by default.
-Access services via SSH tunnel or add a reverse proxy (Caddy/nginx) later.
+Open WebUI and OpenCode publish on the host like other user-facing apps in this repo.
+Ollama, OpenClaw, and DCGM Exporter stay bound to `127.0.0.1`.
+
+This means:
+
+- LAN clients can reach Open WebUI at `http://HOST_IP:8080`
+- LAN clients can reach OpenCode at `http://HOST_IP:4096`
+- Ollama API remains local-only on `127.0.0.1:11434`
+- OpenClaw remains local-only on `127.0.0.1:8081`
+- DCGM metrics remain local-only on `127.0.0.1:9400`
+
+If you want browser access without publishing ports on the LAN, use an SSH tunnel instead.
 
 ```bash
 # SSH tunnel example to access Open WebUI from your workstation:
@@ -763,8 +775,8 @@ Run through this after first deployment:
 - [ ] `./start.sh` completes without errors
 - [ ] `./healthcheck.sh` reports all services healthy
 - [ ] `docker exec ai-ollama ollama list` shows pulled models
-- [ ] Open WebUI loads at `http://127.0.0.1:8080`
-- [ ] OpenCode loads at `http://127.0.0.1:4096` and prompts for login
+- [ ] Open WebUI loads at `http://HOST_IP:8080`
+- [ ] OpenCode loads at `http://HOST_IP:4096` and prompts for login
 - [ ] Can send a message in Open WebUI and get a response
 - [ ] OpenCode can open the repo tree and list files under `/workspace`
 - [ ] `curl http://127.0.0.1:9400/metrics | grep DCGM_FI_DEV_GPU_UTIL` returns a value
