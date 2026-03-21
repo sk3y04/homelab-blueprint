@@ -286,12 +286,15 @@ chmod +x *.sh
 ./start.sh
 
 # 4. Pull models (first run — takes 10-30 min depending on connection)
-docker exec ai-ollama ollama pull qwen3:32b
-docker exec ai-ollama ollama pull qwen3:14b
+docker exec ai-ollama ollama pull qwen3.5:9b
+docker exec ai-ollama ollama pull qwen3.5:27b
+docker exec ai-ollama ollama pull qwen3-coder-next
 
 # 5. Open WebUI — create your admin account
 # Open http://HOST_IP:8080 in a browser.
 # Local access on the Docker host still works via http://127.0.0.1:8080.
+# If you access Open WebUI from another machine, add that exact LAN origin to
+# OPEN_WEBUI_CORS_ALLOW_ORIGIN in .env so WebSocket streaming is accepted.
 # First start note: Open WebUI will run SQLite migrations and may download its
 # default embedding model (`sentence-transformers/all-MiniLM-L6-v2`). That can
 # take a few minutes and produces noisy logs such as `Running upgrade ...`,
@@ -331,6 +334,7 @@ docker exec ai-ollama ollama pull qwen3:14b
 - `qwen3.5:14b` is realistic for local inference and can also be a training target, but QLoRA runs will be slower and tighter on memory than 9B.
 - `qwen3.5:35b` is too close to the 24 GB ceiling to use as the default local model safely.
 - `OLLAMA_MAX_LOADED_MODELS=1` ensures Ollama unloads the previous model before loading a new one, preventing OOM.
+- `OLLAMA_NUM_PARALLEL=1` is the safest default on a 24 GB 3090; only raise it after you confirm your preferred model streams reliably in Open WebUI.
 - `qwen3-coder-next` is available in Ollama and advertises a 256K context window. Check the exact tag and local availability before first pull:
 
 ```bash
@@ -624,6 +628,12 @@ docker logs ai-dcgm-exporter --tail 100 -f
 docker compose -f services/ai-stack/docker-compose.yml logs --tail 100 -f
 ```
 
+### Version pinning
+
+- The compose stack pins Open WebUI to a stable release by default via `OPEN_WEBUI_IMAGE` in `.env`.
+- Avoid `ghcr.io/open-webui/open-webui:main` for normal homelab use. Use a floating tag only when you are intentionally testing upstream changes.
+- Before upgrading Open WebUI, back up `$AI_ACTIVE_DATA_DIR/open-webui/` because upstream releases can include database migrations.
+
 If the existing Promtail is configured to ship all Docker container logs to Loki, the AI stack container logs are automatically available in Grafana's log explorer — filter by `container_name=~"ai-.*"`.
 
 ---
@@ -841,6 +851,24 @@ docker network inspect ai-stack
 # Verify both containers are on the same network
 docker inspect ai-ollama --format='{{json .NetworkSettings.Networks}}' | python3 -m json.tool
 docker inspect ai-open-webui --format='{{json .NetworkSettings.Networks}}' | python3 -m json.tool
+```
+
+### Open WebUI loads but chat streaming never appears on LAN
+
+If the logs contain `is not an accepted origin`, the browser origin is not in
+`OPEN_WEBUI_CORS_ALLOW_ORIGIN`, so the WebSocket connection is rejected even
+though normal HTTP requests return `200`.
+
+Example for a host published on port `8087` and reached at `192.168.1.44`:
+
+```bash
+OPEN_WEBUI_CORS_ALLOW_ORIGIN=http://192.168.1.44:8087;http://127.0.0.1:8087;http://localhost:8087
+```
+
+Then restart Open WebUI:
+
+```bash
+docker compose up -d open-webui
 ```
 
 ### OpenClaw is optional and not part of the default boot path

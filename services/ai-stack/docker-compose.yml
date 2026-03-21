@@ -48,8 +48,8 @@ services:
       - TZ=${TZ}
       # Only keep 1 model loaded — the 3090 cannot hold two 32B models.
       - OLLAMA_MAX_LOADED_MODELS=${OLLAMA_MAX_LOADED_MODELS:-1}
-      # Parallel request slots — conservative to avoid OOM with large models.
-      - OLLAMA_NUM_PARALLEL=${OLLAMA_NUM_PARALLEL:-2}
+      # Parallel request slots — 1 is the safest default on a 24 GB 3090.
+      - OLLAMA_NUM_PARALLEL=${OLLAMA_NUM_PARALLEL:-1}
       # Enable flash attention for faster inference and lower VRAM usage.
       - OLLAMA_FLASH_ATTENTION=1
       # Allow connections from other containers on the Docker network.
@@ -82,7 +82,7 @@ services:
   # Full-featured web UI for interacting with Ollama models.
   # Stores chat history, user accounts, and settings in a local SQLite DB.
   open-webui:
-    image: ghcr.io/open-webui/open-webui:main
+    image: ${OPEN_WEBUI_IMAGE:-ghcr.io/open-webui/open-webui:v0.8.10}
     container_name: ai-open-webui
     restart: unless-stopped
 
@@ -97,7 +97,7 @@ services:
       - TZ=${TZ}
       - OLLAMA_BASE_URL=http://ollama:11434
       - WEBUI_SECRET_KEY=${OPEN_WEBUI_SECRET_KEY}
-      - CORS_ALLOW_ORIGIN=http://127.0.0.1:${OPEN_WEBUI_PORT:-8080};http://localhost:${OPEN_WEBUI_PORT:-8080}
+      - CORS_ALLOW_ORIGIN=${OPEN_WEBUI_CORS_ALLOW_ORIGIN:-http://127.0.0.1:${OPEN_WEBUI_PORT:-8080};http://localhost:${OPEN_WEBUI_PORT:-8080}}
       - USER_AGENT=${OPEN_WEBUI_USER_AGENT:-homelab-blueprint-open-webui/1.0}
       - HF_TOKEN=${OPEN_WEBUI_HF_TOKEN:-}
       # Disable telemetry.
