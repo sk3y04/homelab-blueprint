@@ -291,6 +291,12 @@ docker exec ai-ollama ollama pull qwen3:14b
 
 # 5. Open WebUI — create your admin account
 # Open http://127.0.0.1:8080 in a browser.
+# First start note: Open WebUI will run SQLite migrations and may download its
+# default embedding model (`sentence-transformers/all-MiniLM-L6-v2`). That can
+# take a few minutes and produces noisy logs such as `Running upgrade ...`,
+# `Fetching 30 files`, and `Loading weights`. This is expected on first boot.
+# If you do not set `OPEN_WEBUI_HF_TOKEN`, Hugging Face will warn about
+# unauthenticated requests; startup still succeeds, but downloads may be slower.
 # After creating the admin account, set OPEN_WEBUI_ENABLE_SIGNUP=false in .env
 # and restart: docker compose up -d open-webui
 
@@ -773,6 +779,13 @@ Run through this after first deployment:
 
 ### DCGM Exporter fails to start on RTX 3090
 
+Normal startup note:
+
+- `DCGM successfully initialized!` followed by `Starting webserver` and `Listening on ... :9400` means the exporter is healthy.
+- `Falling back to metric file '/etc/dcgm-exporter/default-counters.csv'` is acceptable and just means the default counter set is being used.
+- `Skipping line ... metric not enabled` for counters like `DCGM_FI_PROF_PCIE_TX_BYTES` and `DCGM_FI_PROF_PCIE_RX_BYTES` is common on consumer RTX cards.
+- `Not collecting NvSwitch metrics`, `Not collecting NvLink metrics`, and similar lines are informational when the hardware or loaded DCGM modules do not expose those datacenter-oriented counters.
+
 DCGM is designed for datacenter GPUs (Tesla, A100, H100). On consumer GeForce/RTX cards, it may fail with `DCGM initialization error`. If this happens:
 
 1. Try the `--no-dcgm-exporter` approach — remove the `dcgm-exporter` service and rely on the existing `nvidia-smi-exporter` from the monitoring stack (it already scrapes the same GPU).
@@ -785,6 +798,12 @@ DCGM is designed for datacenter GPUs (Tesla, A100, H100). On consumer GeForce/RT
 3. As a last resort, add `--collectors /etc/dcgm-exporter/default-counters.csv` to only collect basic metrics.
 
 ### Ollama OOM (out of memory)
+
+Normal startup note:
+
+- `discovering available GPUs...`, `inference compute ... library=CUDA`, and `vram-based default context ... default_num_ctx=32768` are expected on this RTX 3090 stack.
+- `experimental Vulkan support disabled` is informational here because Ollama is correctly using CUDA, not Vulkan.
+- If Ollama starts cleanly but later OOMs under load, reduce `OLLAMA_NUM_PARALLEL` first.
 
 ```bash
 # Check VRAM usage
