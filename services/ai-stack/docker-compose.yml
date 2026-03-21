@@ -1,5 +1,5 @@
 # --------------------------------------------------------------------------------
-# AI Stack — Ollama + Open WebUI + OpenClaw + DCGM Exporter
+# AI Stack — Ollama + Open WebUI + OpenClaw + OpenCode + DCGM Exporter
 # --------------------------------------------------------------------------------
 # Local LLM inference stack for an NVIDIA RTX 3090 24 GB.
 #
@@ -7,6 +7,7 @@
 #   - ollama:          Local LLM runtime (GPU-accelerated).
 #   - open-webui:      Web UI for chatting with local models.
 #   - openclaw:        Agent layer with OpenAI-compatible backend.
+#   - opencode:        Browser-based coding agent backed by local Ollama.
 #   - dcgm-exporter:   NVIDIA GPU metrics exporter for Prometheus.
 #
 # Monitoring:
@@ -33,7 +34,7 @@
 services:
   # ── Ollama — Local LLM Runtime ──────────────────────────────────────────
   # Serves models via REST API on port 11434.
-  # Models are stored persistently in ${AI_DATA_DIR}/ollama.
+  # Models are stored persistently in ${AI_ACTIVE_DATA_DIR}/ollama.
   ollama:
     image: ollama/ollama:latest
     container_name: ai-ollama
@@ -54,7 +55,9 @@ services:
       - OLLAMA_HOST=0.0.0.0
 
     volumes:
-      - ${AI_DATA_DIR}/ollama:/root/.ollama
+      - ${AI_ACTIVE_DATA_DIR}/ollama:/root/.ollama
+      - ${AI_ACTIVE_DATA_DIR}/lora-adapters:/lora-adapters:ro
+      - ./Modelfile.persona.example:/models/Modelfile.persona:ro
 
     deploy:
       resources:
@@ -100,7 +103,7 @@ services:
       - ENABLE_SIGNUP=${OPEN_WEBUI_ENABLE_SIGNUP:-false}
 
     volumes:
-      - ${AI_DATA_DIR}/open-webui:/app/backend/data
+      - ${AI_ACTIVE_DATA_DIR}/open-webui:/app/backend/data
 
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8080/health || exit 1"]
@@ -108,6 +111,51 @@ services:
       timeout: 10s
       retries: 5
       start_period: 60s
+
+    networks:
+      - ai-stack
+
+  # ── OpenCode — Browser-Based Coding Agent ───────────────────────────────
+  # Web UI and agent runtime for code tasks against the checked-out repo.
+  # Uses Ollama through an OpenAI-compatible provider config.
+  opencode:
+    image: ghcr.io/anomalyco/opencode:latest
+    container_name: ai-opencode
+    restart: unless-stopped
+
+    depends_on:
+      ollama:
+        condition: service_healthy
+
+    working_dir: /workspace
+    command: ["web", "--hostname=0.0.0.0", "--port=4096"]
+
+    ports:
+      - "127.0.0.1:${OPENCODE_PORT:-4096}:4096"
+
+    environment:
+      - TZ=${TZ}
+      - HOME=/data
+      - XDG_CONFIG_HOME=/data/config
+      - XDG_DATA_HOME=/data/share
+      - OPENCODE_CONFIG=/config/opencode.json
+      - OPENCODE_SERVER_PASSWORD=${OPENCODE_SERVER_PASSWORD}
+      - OPENCODE_SERVER_USERNAME=${OPENCODE_SERVER_USERNAME:-opencode}
+      - OPENCODE_DISABLE_AUTOUPDATE=true
+      - OPENCODE_MODEL=${OPENCODE_MODEL:-ollama/qwen3-coder-next}
+      - OPENCODE_SMALL_MODEL=${OPENCODE_SMALL_MODEL:-ollama/qwen3.5:9b}
+
+    volumes:
+      - ${AI_ACTIVE_DATA_DIR}/opencode:/data
+      - ../../:/workspace:rw
+      - ./config/opencode/opencode.json:/config/opencode.json:ro
+
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf -u \"$${OPENCODE_SERVER_USERNAME:-opencode}:$${OPENCODE_SERVER_PASSWORD}\" http://localhost:4096/global/health >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 45s
 
     networks:
       - ai-stack
@@ -142,11 +190,11 @@ services:
       # Point to Ollama's OpenAI-compatible endpoint.
       - OPENAI_API_BASE=http://ollama:11434/v1
       - OPENAI_API_KEY=not-needed
-      - DEFAULT_MODEL=${OPENCLAW_DEFAULT_MODEL:-qwen3:32b}
+      - DEFAULT_MODEL=${OPENCLAW_DEFAULT_MODEL:-qwen3.5:27b}
       - CONFIG_PATH=/config/config.yaml
 
     volumes:
-      - ${AI_DATA_DIR}/openclaw:/data
+      - ${AI_ACTIVE_DATA_DIR}/openclaw:/data
       - ./config/openclaw:/config:ro
 
     healthcheck:
@@ -201,6 +249,44 @@ services:
     networks:
       - ai-stack
       - monitoring
+
+  # ── Training — Persona LoRA Workspace ──────────────────────────────────
+  # Opt-in GPU training container for preprocessing, QLoRA runs, adapter
+  # export, and experiment logging. Only starts when the `training` profile
+  # is explicitly requested.
+  training:
+    image: ${AI_TRAINING_IMAGE:-unsloth/unsloth:latest}
+    container_name: ai-training
+    profiles: ["training"]
+    working_dir: /workspace
+    command: ["bash"]
+    stdin_open: true
+    tty: true
+    shm_size: "16gb"
+
+    environment:
+      - TZ=${TZ}
+      - PYTHONUNBUFFERED=1
+      - HF_HOME=/workspace/.cache/huggingface
+      - HUGGINGFACE_HUB_CACHE=/workspace/.cache/huggingface
+      - TRANSFORMERS_CACHE=/workspace/.cache/huggingface
+
+    volumes:
+      - ${AI_ACTIVE_DATA_DIR}/training:/workspace
+      - ${AI_ACTIVE_DATA_DIR}/lora-adapters:/output
+      - ${AI_ARCHIVE_DATA_DIR}:/archive
+      - ../../:/repo:ro
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu, utility]
+
+    networks:
+      - ai-stack
 
 networks:
   ai-stack:

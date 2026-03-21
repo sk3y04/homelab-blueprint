@@ -2,7 +2,7 @@
 # Ollama Modelfile — LoRA Persona Model (Example)
 # ==========================================================================
 # This Modelfile creates a custom model from a LoRA adapter trained on
-# your Discord conversations. It uses qwen3:14b as the base model.
+# your Discord conversations. It uses qwen3.5:9b as the base model.
 #
 # Prerequisites:
 #   1. Train a LoRA adapter using your conversation data.
@@ -19,7 +19,7 @@
 #   - /opt/ai-stack/data/lora-adapters:/lora-adapters:ro
 # ==========================================================================
 
-FROM qwen3:14b
+FROM qwen3.5:9b
 
 ADAPTER /lora-adapters/persona-adapter.gguf
 

@@ -14,7 +14,7 @@ llm:
   provider: openai
   base_url: http://ollama:11434/v1
   api_key: "not-needed"
-  default_model: qwen3:32b
+  default_model: qwen3.5:27b
   # Timeout for inference requests (seconds). Large models on a 3090 may
   # need up to 120s for long contexts.
   timeout: 120
@@ -35,17 +35,17 @@ agent:
 # Define named model aliases for quick switching.
 models:
   general:
-    name: qwen3:32b
-    description: "General-purpose reasoning (Q4_K_M, ~20 GB VRAM)"
+    name: qwen3.5:27b
+    description: "General-purpose chat and reasoning (~17 GB VRAM)"
   coding:
-    name: qwen3-coder:14b
-    description: "Code generation and review (Q5_K_M, ~11 GB VRAM)"
+    name: qwen3-coder-next
+    description: "Code generation and review (agentic coding model from Ollama)"
   persona:
     # Placeholder — uncomment after creating the LoRA persona model.
     # name: persona:latest
-    # description: "Custom LoRA persona (Discord voice clone)"
-    name: qwen3:14b
-    description: "Base model for future LoRA fine-tune"
+    # description: "Custom LoRA persona fine-tuned on your data (VRAM depends on base model)"
+    name: qwen3.5:9b
+    description: "Base model for future LoRA fine-tune and lighter chat tasks"
 
 # ── Integrations ──────────────────────────────────────────────────────────
 # All integrations are disabled by default for local-only deployment.

@@ -1,9 +1,10 @@
-# AI Stack — Ollama + Open WebUI + OpenClaw
+# AI Stack — Ollama + Open WebUI + OpenClaw + OpenCode
 
 Local LLM inference stack for an NVIDIA RTX 3090 24 GB. **Ollama** serves
 quantized models via a REST API, **Open WebUI** provides a full-featured
 chat interface, **OpenClaw** adds an agent layer with future Discord
-integration, and **DCGM Exporter** feeds GPU metrics into the existing
+integration, **OpenCode** provides a browser-based coding agent backed by the
+same local models, and **DCGM Exporter** feeds GPU metrics into the existing
 homelab Prometheus + Grafana.
 
 ```
@@ -11,6 +12,10 @@ homelab Prometheus + Grafana.
 You ──► browser ──┤  Open WebUI    │
                   │  :8080         │──────► Ollama :11434 ◄── RTX 3090
                   └────────────────┘               ▲
+                  ┌────────────────┐               │
+You ──► browser ──┤  OpenCode      │───────────────┘
+                  │  :4096         │
+                  └────────────────┘
                   ┌────────────────┐               │
 Discord (future)──┤  OpenClaw      │───────────────┘
                   │  :8081         │
@@ -32,14 +37,20 @@ Prometheus ◄──────┤ DCGM Exporter  │◄── RTX 3090
 6. [Model Strategy](#model-strategy)
 7. [Model Bootstrap](#model-bootstrap)
 8. [OpenClaw Configuration](#openclaw-configuration)
-9. [GPU Power Management](#gpu-power-management)
-10. [Monitoring](#monitoring)
-11. [LoRA Training Pipeline](#lora-training-pipeline)
-12. [Security](#security)
-13. [Backup & Restore](#backup--restore)
-14. [Validation Checklist](#validation-checklist)
-15. [Troubleshooting](#troubleshooting)
-16. [Upgrade Procedure](#upgrade-procedure)
+9. [OpenCode Configuration](#opencode-configuration)
+10. [GPU Power Management](#gpu-power-management)
+11. [Monitoring](#monitoring)
+12. [LoRA Training Pipeline](#lora-training-pipeline)
+13. [Security](#security)
+14. [Backup & Restore](#backup--restore)
+15. [Validation Checklist](#validation-checklist)
+16. [Troubleshooting](#troubleshooting)
+17. [Upgrade Procedure](#upgrade-procedure)
+
+For a full persona fine-tuning plan tailored to this exact RTX 3090-based stack,
+see `guide/AI_PERSONA_TRAINING.md`.
+For the operator reference covering the concrete training, export, deployment,
+and promotion commands, see `services/ai-stack/scripts/README.md`.
 
 ---
 
@@ -52,6 +63,7 @@ Prometheus ◄──────┤ DCGM Exporter  │◄── RTX 3090
 | **Host** | NVIDIA driver, CUDA toolkit, NVIDIA Container Toolkit, Docker Engine + Compose plugin | Bare minimum on host — everything else in containers. |
 | **Container** | `ai-ollama` | LLM runtime with GPU passthrough. |
 | **Container** | `ai-open-webui` | Web chat UI. CPU only — talks to Ollama over Docker network. |
+| **Container** | `ai-opencode` | Browser-based coding agent. CPU only — talks to Ollama over Docker network and works on the checked-out repo bind-mounted at `/workspace`. |
 | **Container** | `ai-openclaw` | Agent layer. CPU only — talks to Ollama's OpenAI-compatible API. |
 | **Container** | `ai-dcgm-exporter` | GPU metrics exporter. Joins the existing `monitoring` network. |
 
@@ -59,7 +71,9 @@ Prometheus ◄──────┤ DCGM Exporter  │◄── RTX 3090
 
 ```
 ┌─── ai-stack network (bridge) ──────────────────────────────────┐
-│  ollama:11434 ◄── open-webui ◄── openclaw                      │
+│  ollama:11434 ◄── open-webui                                   │
+│        ▲          ◄── opencode                                 │
+│        └──────────◄── openclaw                                 │
 │  dcgm-exporter:9400                                            │
 └────────────────────────────────────────────────────────────────┘
          │
@@ -69,21 +83,67 @@ Prometheus ◄──────┤ DCGM Exporter  │◄── RTX 3090
          └── Host ports (all 127.0.0.1):
                :11434  Ollama API
                :8080   Open WebUI
+             :4096   OpenCode
                :8081   OpenClaw
                :9400   DCGM Exporter
 ```
 
 ### Persistent storage layout
 
-All data under `$AI_DATA_DIR` (default `/opt/ai-stack/data`):
+Active data under `$AI_ACTIVE_DATA_DIR` (default `/opt/ai-stack/data`):
 
 ```
 /opt/ai-stack/data/
 ├── ollama/          # Models, manifests, blobs (~20-40 GB per model)
 ├── open-webui/      # SQLite DB, chat history, user accounts
+├── opencode/        # Sessions, auth storage, config cache, snapshots
 ├── openclaw/        # Agent state and conversation logs
 └── lora-adapters/   # Future: exported GGUF LoRA adapters
 ```
+
+Optional archive storage under `$AI_ARCHIVE_DATA_DIR` can live on HDD RAID:
+
+```
+/mnt/archive/ai-stack/
+├── raw-datasets/    # Original Discord exports and other source data
+├── archived-runs/   # Completed training runs moved off SSD
+├── archived-models/ # Bulk model archive not kept in the active Ollama store
+└── backups/         # Long-term copies of adapters, configs, and logs
+```
+
+The checked-out `homelab-blueprint` repository is also bind-mounted into the
+OpenCode container at `/workspace`, so the web UI works directly against the
+same files that define the stack.
+
+### SSD vs HDD storage guidance
+
+`$AI_ACTIVE_DATA_DIR` does **not** have to be on SSD. HDD RAID works correctly for AI
+model storage, but it changes the operational experience.
+
+What storage speed affects most:
+
+- first model load into RAM / VRAM
+- switching between large models
+- checkpoint save and load during training
+- cache-heavy conversion and export steps
+
+What storage speed affects much less:
+
+- token generation after the model is already loaded into VRAM
+- steady-state chat speed during a long session with the same model
+
+Recommended layout on this homelab:
+
+- **SSD preferred**: active training workspace, current checkpoints, active GGUF export work, frequently switched models
+- **HDD RAID acceptable**: long-term Ollama model archive, raw Discord exports, completed training runs, old adapters, backups
+
+Recommended split for this repository:
+
+- `$AI_ACTIVE_DATA_DIR` on SSD
+- `$AI_ARCHIVE_DATA_DIR` on HDD RAID
+
+If you only have one location available, HDD RAID is still fine. Expect slower
+model load times and slower iteration during training and export.
 
 ---
 
@@ -101,6 +161,8 @@ services/ai-stack/
 ├── set-gpu-inference.sh
 ├── set-gpu-training.sh
 └── config/
+  ├── opencode/
+  │   └── opencode.json
     └── openclaw/
         └── config.yaml
 ```
@@ -187,8 +249,9 @@ sudo usermod -aG docker "$USER"
 ### 4. Create data directories
 
 ```bash
-sudo mkdir -p /opt/ai-stack/data/{ollama,open-webui,openclaw,lora-adapters}
-sudo chown -R "$(id -u):$(id -g)" /opt/ai-stack
+sudo mkdir -p /opt/ai-stack/data/{ollama,open-webui,opencode,openclaw,lora-adapters,training}
+sudo mkdir -p /mnt/archive/ai-stack/{raw-datasets,archived-runs,archived-models,backups}
+sudo chown -R "$(id -u):$(id -g)" /opt/ai-stack /mnt/archive/ai-stack
 ```
 
 ### 5. Set inference power limit
@@ -209,7 +272,9 @@ cd services/ai-stack
 cp .env.example .env
 # Edit .env — at minimum set:
 #   OPEN_WEBUI_SECRET_KEY  (openssl rand -hex 32)
-#   AI_DATA_DIR            (or keep /opt/ai-stack/data)
+#   OPENCODE_SERVER_PASSWORD (openssl rand -base64 24)
+#   AI_ACTIVE_DATA_DIR     (SSD recommended)
+#   AI_ARCHIVE_DATA_DIR    (HDD RAID recommended)
 
 # 2. Ensure the monitoring stack is running (provides the 'monitoring' network)
 cd ../monitoring
@@ -229,7 +294,13 @@ docker exec ai-ollama ollama pull qwen3:14b
 # After creating the admin account, set OPEN_WEBUI_ENABLE_SIGNUP=false in .env
 # and restart: docker compose up -d open-webui
 
-# 6. Verify
+# 6. OpenCode — browser-based coding agent
+# Open http://127.0.0.1:4096 in a browser.
+# Log in with:
+#   username: OPENCODE_SERVER_USERNAME
+#   password: OPENCODE_SERVER_PASSWORD
+
+# 7. Verify
 ./healthcheck.sh
 ```
 
@@ -241,19 +312,22 @@ docker exec ai-ollama ollama pull qwen3:14b
 
 | Model | Quant | VRAM (approx) | Use |
 |-------|-------|---------------|-----|
-| `qwen3:32b` | Q4_K_M | ~20 GB | Main general-purpose reasoning |
-| `qwen3:14b` | Q5_K_M | ~11 GB | Base for future LoRA fine-tuning |
-| `qwen3-coder:14b` | Q5_K_M | ~11 GB | Code generation and review |
+| `qwen3.5:27b` | Ollama default quant | ~17 GB | Main general-purpose chat and reasoning |
+| `qwen3.5:9b` | Ollama default quant | ~6.6 GB | Base for future LoRA fine-tuning and lighter chat |
+| `qwen3.5:14b` | Ollama default quant | ~9-11 GB | Optional heavier LoRA base if 9B underfits |
+| `qwen3-coder-next` | `latest` / `q4_K_M` | See Ollama model page | Code generation and review |
 
 **Important constraints:**
 
-- Only **one 32B model** fits in 24 GB VRAM at a time. The 14B models can coexist with headroom.
+- `qwen3.5:27b` leaves enough VRAM headroom on a 3090 for stable local inference.
+- `qwen3.5:14b` is realistic for local inference and can also be a training target, but QLoRA runs will be slower and tighter on memory than 9B.
+- `qwen3.5:35b` is too close to the 24 GB ceiling to use as the default local model safely.
 - `OLLAMA_MAX_LOADED_MODELS=1` ensures Ollama unloads the previous model before loading a new one, preventing OOM.
-- If Ollama does not yet carry `qwen3-coder` as a tagged model, use `qwen2.5-coder:14b` as an alternative. Check availability:
+- `qwen3-coder-next` is available in Ollama and advertises a 256K context window. Check the exact tag and local availability before first pull:
 
 ```bash
 docker exec ai-ollama ollama list    # see what's available locally
-ollama show qwen3-coder:14b          # check if the tag exists in the registry
+ollama show qwen3-coder-next         # check the tag in the registry
 ```
 
 ### Quantization notes
@@ -262,6 +336,20 @@ ollama show qwen3-coder:14b          # check if the tag exists in the registry
 - **Q5_K_M**: Slightly higher quality, fits comfortably for 14B models.
 - **Q8_0**: Only use for 7B or smaller models if you need near-FP16 quality.
 
+### Persona LoRA guidance on this host
+
+For a Discord DM persona dataset of about 4,000 messages:
+
+- start with **Qwen 3.5 9B Instruct** for the first QLoRA run
+- treat **Qwen 3.5 14B Instruct** as the follow-up experiment if 9B is too generic
+- keep **Qwen 3.5 27B** as the preferred inference model if you want a stronger general chat model after the persona workflow is stable
+
+Why this order is the safest on a 3090:
+
+- 9B gives more VRAM headroom for sequence length, checkpoints, and recovery from formatting mistakes
+- 14B may produce somewhat better style retention, but iteration cost is higher
+- with a small persona dataset, data quality and prompt construction usually matter more than moving from 9B to 14B immediately
+
 ---
 
 ## Model Bootstrap
@@ -269,34 +357,32 @@ ollama show qwen3-coder:14b          # check if the tag exists in the registry
 ### Pull initial models
 
 ```bash
-# General purpose (largest, ~20 GB VRAM)
-docker exec ai-ollama ollama pull qwen3:32b
+# General purpose (best local quality on a 3090)
+docker exec ai-ollama ollama pull qwen3.5:27b
 
-# Base for future LoRA training
-docker exec ai-ollama ollama pull qwen3:14b
+# Base for future LoRA training and lighter chat
+docker exec ai-ollama ollama pull qwen3.5:9b
 
-# Coding — use the best available tag
-docker exec ai-ollama ollama pull qwen3-coder:14b
-# If that tag doesn't exist yet:
-# docker exec ai-ollama ollama pull qwen2.5-coder:14b
+# Coding — default coding model
+docker exec ai-ollama ollama pull qwen3-coder-next
 ```
 
 ### Test each model
 
 ```bash
 # Quick test — general model
-docker exec ai-ollama ollama run qwen3:32b "What is the capital of France? Answer in one sentence."
+docker exec ai-ollama ollama run qwen3.5:27b "What is the capital of France? Answer in one sentence."
 
 # Quick test — coding model
-docker exec ai-ollama ollama run qwen3-coder:14b "Write a Python function that checks if a number is prime."
+docker exec ai-ollama ollama run qwen3-coder-next "Write a Python function that checks if a number is prime."
 
 # Quick test — base model
-docker exec ai-ollama ollama run qwen3:14b "Explain Docker networking in three sentences."
+docker exec ai-ollama ollama run qwen3.5:9b "Explain Docker networking in three sentences."
 ```
 
 ### Verify persistence
 
-Models are stored in `$AI_DATA_DIR/ollama` (bind-mounted to `/root/.ollama` inside the container). They survive container restarts and image updates:
+Models are stored in `$AI_ACTIVE_DATA_DIR/ollama` (bind-mounted to `/root/.ollama` inside the container). They survive container restarts and image updates:
 
 ```bash
 # List all downloaded models
@@ -314,23 +400,23 @@ See `Modelfile.persona.example` in the AI stack directory. After training and ex
 # 1. Place the adapter file
 cp persona-adapter.gguf /opt/ai-stack/data/lora-adapters/
 
-# 2. Add these volumes to the ollama service in docker-compose.yml:
-#    - ./Modelfile.persona.example:/models/Modelfile.persona:ro
-#    - /opt/ai-stack/data/lora-adapters:/lora-adapters:ro
+# 2. Recreate Ollama to ensure the latest mounts are active
+docker compose up -d ollama
 
-# 3. Restart Ollama
-docker compose restart ollama
-
-# 4. Create the model
+# 3. Create the model
 docker exec ai-ollama ollama create persona -f /models/Modelfile.persona
 
-# 5. Test it
+# 4. Test it
 docker exec ai-ollama ollama run persona "Hey, what's up?"
 
-# 6. Update OpenClaw config to use the persona model:
+# 5. Update OpenClaw config to use the persona model:
 #    Edit config/openclaw/config.yaml → llm.default_model: persona:latest
 #    Restart: docker compose restart openclaw
 ```
+
+The Ollama service now mounts both the persona Modelfile and the live
+`lora-adapters` directory by default, so deployment no longer requires a manual
+compose edit.
 
 ---
 
@@ -339,7 +425,7 @@ docker exec ai-ollama ollama run persona "Hey, what's up?"
 OpenClaw is configured via `config/openclaw/config.yaml`. Key settings:
 
 - **Backend**: Points to `http://ollama:11434/v1` (OpenAI-compatible)
-- **Default model**: `qwen3:32b` — change to `persona:latest` after training
+- **Default model**: `qwen3.5:27b` — change to `persona:latest` after training
 - **Discord integration**: Disabled by default. Uncomment the `discord` section in the config when ready.
 
 ### Switching models
@@ -348,7 +434,7 @@ Edit `config/openclaw/config.yaml`:
 
 ```yaml
 llm:
-  default_model: persona:latest   # was: qwen3:32b
+  default_model: persona:latest   # was: qwen3.5:27b
 ```
 
 Then restart: `docker compose restart openclaw`
@@ -376,6 +462,60 @@ integrations:
 > **Security note**: Store the Discord bot token in `.env` and reference it via
 > environment variable rather than hardcoding in the YAML, if OpenClaw supports
 > `${DISCORD_BOT_TOKEN}` substitution. Check OpenClaw docs for the exact mechanism.
+
+---
+
+## OpenCode Configuration
+
+OpenCode is configured via `config/opencode/opencode.json` and launched with the
+`opencode web` command inside the container. The stack mounts the checked-out
+repository root into the container at `/workspace`, so OpenCode works directly
+on this repo without needing a second sync step.
+
+Key settings:
+
+- **Provider**: `ollama` via `http://ollama:11434/v1`
+- **Primary model**: `${OPENCODE_MODEL}` from `.env` (default `ollama/qwen3-coder-next`)
+- **Small model**: `${OPENCODE_SMALL_MODEL}` from `.env` (default `ollama/qwen3.5:9b`)
+- **Sharing**: Disabled by default so session URLs are never published accidentally
+- **Auth**: HTTP basic auth using `OPENCODE_SERVER_USERNAME` and `OPENCODE_SERVER_PASSWORD`
+
+### Accessing OpenCode
+
+Open the web UI locally:
+
+```bash
+http://127.0.0.1:4096
+```
+
+If you want to attach the TUI from the host instead of using the browser UI:
+
+```bash
+OPENCODE_SERVER_PASSWORD='your-password' \
+opencode attach http://127.0.0.1:4096
+```
+
+### Switching models
+
+Edit `.env` and update one or both values:
+
+```bash
+OPENCODE_MODEL=ollama/qwen3-coder-next
+OPENCODE_SMALL_MODEL=ollama/qwen3.5:9b
+```
+
+Then restart the service:
+
+```bash
+docker compose restart opencode
+```
+
+### Changing the mounted workspace
+
+By default, OpenCode works against the same Git checkout that contains this AI
+stack because `../../` is bind-mounted to `/workspace`. If you want it to work
+on a different repo, change that bind mount in `services/ai-stack/docker-compose.yml`
+and restart `opencode`.
 
 ---
 
@@ -466,6 +606,9 @@ docker logs ai-open-webui --tail 100 -f
 # OpenClaw logs
 docker logs ai-openclaw --tail 100 -f
 
+# OpenCode logs
+docker logs ai-opencode --tail 100 -f
+
 # DCGM Exporter logs
 docker logs ai-dcgm-exporter --tail 100 -f
 
@@ -482,19 +625,22 @@ If the existing Promtail is configured to ship all Docker container logs to Loki
 > This section documents the future workflow. The stack is prepared but the
 > training container is not yet included in docker-compose.yml.
 
+For the full training strategy, data-shaping plan, hyperparameter guidance, and
+deployment flow for Discord DM persona fine-tuning on this host, see
+`guide/AI_PERSONA_TRAINING.md`.
+
 ### Overview
 
 1. **Export Discord conversations** → clean text dataset
 2. **Format** → chat template (e.g. ShareGPT or Alpaca format)
 3. **Train LoRA** → using `unsloth` or `axolotl` in a GPU container
 4. **Export adapter** → GGUF format via `llama.cpp`
-5. **Create Ollama model** → using `Modelfile.persona.example`
+5. **Create Ollama model** → using `Modelfile.persona.example` with `qwen3.5:9b` as the base
 6. **Switch OpenClaw** → point to `persona:latest`
 
-### Training container (to be added later)
+### Training container
 
 ```yaml
-# Add to docker-compose.yml when ready:
 training:
   image: unsloth/unsloth:latest   # or axolotl, verify current image
   container_name: ai-training
@@ -513,7 +659,11 @@ training:
     - ai-stack
 ```
 
-Start training with: `docker compose --profile training run training`
+The training profile is now defined in `services/ai-stack/docker-compose.yml`.
+The same compose file also mounts the persona Modelfile and live adapter
+directory into Ollama for deployment.
+
+Start training with: `docker compose --profile training run --rm training`
 
 The `profiles: ["training"]` key ensures it never starts during normal `docker compose up -d`.
 
@@ -537,6 +687,7 @@ ssh -L 8080:127.0.0.1:8080 user@homeserver
 | Variable | Sensitivity | Generation |
 |----------|------------|------------|
 | `OPEN_WEBUI_SECRET_KEY` | High — session encryption | `openssl rand -hex 32` |
+| `OPENCODE_SERVER_PASSWORD` | High — OpenCode web/API login | `openssl rand -base64 24` |
 | `OPENCLAW_IMAGE` | Low — image reference | N/A |
 
 Discord bot tokens (future) should also go in `.env`, never in committed config files.
@@ -544,6 +695,7 @@ Discord bot tokens (future) should also go in `.env`, never in committed config 
 ### Least privilege
 
 - Open WebUI and OpenClaw have **no GPU access** — they only talk to Ollama over HTTP.
+- OpenCode has **no GPU access** — it only talks to Ollama over HTTP and reads/writes the bind-mounted workspace.
 - DCGM Exporter has `SYS_ADMIN` capability — required to read GPU counters. It has no network egress outside the Docker networks.
 - No container has access to the Docker socket.
 
@@ -562,10 +714,12 @@ If you later expose Open WebUI via your VPS nginx + Authelia:
 
 | Data | Path | Priority |
 |------|------|----------|
-| Ollama models | `$AI_DATA_DIR/ollama/` | Low — can re-pull from registry. Back up only custom models. |
-| Open WebUI data | `$AI_DATA_DIR/open-webui/` | Medium — chat history, user accounts, settings. |
-| OpenClaw data | `$AI_DATA_DIR/openclaw/` | Medium — agent state. |
-| LoRA adapters | `$AI_DATA_DIR/lora-adapters/` | **High** — training output, expensive to reproduce. |
+| Ollama models | `$AI_ACTIVE_DATA_DIR/ollama/` | Low — can re-pull from registry. Back up only custom models. |
+| Open WebUI data | `$AI_ACTIVE_DATA_DIR/open-webui/` | Medium — chat history, user accounts, settings. |
+| OpenCode data | `$AI_ACTIVE_DATA_DIR/opencode/` | Medium — sessions, auth storage, snapshots. |
+| OpenClaw data | `$AI_ACTIVE_DATA_DIR/openclaw/` | Medium — agent state. |
+| LoRA adapters | `$AI_ACTIVE_DATA_DIR/lora-adapters/` | **High** — training output, expensive to reproduce. |
+| Archive store | `$AI_ARCHIVE_DATA_DIR/` | Medium — long-term datasets, old runs, backups. |
 | Config files | `services/ai-stack/` | **High** — in Git, push regularly. |
 
 ### Backup script example
@@ -586,6 +740,9 @@ docker compose -f services/ai-stack/docker-compose.yml start open-webui
 # Back up LoRA adapters
 cp -a /opt/ai-stack/data/lora-adapters "$BACKUP_DIR/"
 
+# Back up archive data if present
+cp -a /mnt/archive/ai-stack "$BACKUP_DIR/" 2>/dev/null || true
+
 echo "Backup complete: $BACKUP_DIR"
 ```
 
@@ -601,12 +758,14 @@ Run through this after first deployment:
 - [ ] `./healthcheck.sh` reports all services healthy
 - [ ] `docker exec ai-ollama ollama list` shows pulled models
 - [ ] Open WebUI loads at `http://127.0.0.1:8080`
+- [ ] OpenCode loads at `http://127.0.0.1:4096` and prompts for login
 - [ ] Can send a message in Open WebUI and get a response
+- [ ] OpenCode can open the repo tree and list files under `/workspace`
 - [ ] `curl http://127.0.0.1:9400/metrics | grep DCGM_FI_DEV_GPU_UTIL` returns a value
 - [ ] Prometheus target page shows `dcgm-gpu` as UP
 - [ ] Grafana "AI Stack — DCGM GPU Metrics" dashboard shows data
 - [ ] GPU power limit reads 285W (`nvidia-smi -q -d POWER | grep "Power Limit"`)
-- [ ] `docker exec ai-ollama ollama run qwen3:32b "Hello"` returns a response
+- [ ] `docker exec ai-ollama ollama run qwen3.5:27b "Hello"` returns a response
 
 ---
 
@@ -636,7 +795,7 @@ nvidia-smi
 OLLAMA_NUM_PARALLEL=1
 
 # Or switch to a smaller model
-docker exec ai-ollama ollama run qwen3:14b "test"
+docker exec ai-ollama ollama run qwen3.5:9b "test"
 ```
 
 ### Open WebUI can't connect to Ollama
@@ -666,6 +825,34 @@ OpenClaw may not have an official Docker image yet. If `docker pull` fails:
    cd /opt/openclaw
    docker build -t openclaw/openclaw:latest .
    ```
+
+### OpenCode starts but the UI is blank or models are missing
+
+Check the following in order:
+
+1. Confirm the container can reach Ollama:
+
+  ```bash
+  docker exec ai-opencode curl -sf http://ollama:11434/api/tags
+  ```
+
+2. Confirm the configured models match the IDs in Ollama:
+
+  ```bash
+  docker exec ai-ollama ollama list
+  ```
+
+3. Restart OpenCode after changing `.env` model values:
+
+  ```bash
+  docker compose restart opencode
+  ```
+
+4. Check logs for config or auth issues:
+
+  ```bash
+  docker logs ai-opencode --tail 200
+  ```
 
 ### Container can't join 'monitoring' network
 
@@ -708,8 +895,8 @@ cd services/ai-stack
 ./healthcheck.sh
 
 # 3. Check for new model versions (optional)
-docker exec ai-ollama ollama pull qwen3:32b
-docker exec ai-ollama ollama pull qwen3:14b
+docker exec ai-ollama ollama pull qwen3.5:27b
+docker exec ai-ollama ollama pull qwen3.5:9b
 ```
 
 Ollama model data is persistent — image updates do not affect downloaded models.

@@ -1,0 +1,27 @@
+# --------------------------------------------------------------------------
+# ComfyUI — Extra Model Paths Configuration (EXAMPLE)
+# --------------------------------------------------------------------------
+# This file lets ComfyUI search additional directories for models.
+# Useful if you share models between tools or have a separate model store.
+#
+# To use:
+#   cp config/extra_model_paths.example.yaml config/extra_model_paths.yaml
+#   Edit the paths below, then restart ComfyUI.
+#
+# Paths are from the CONTAINER'S perspective.  If you need to mount
+# additional host directories, add them to docker-compose.yml volumes.
+#
+# Documentation:
+#   https://github.com/comfyanonymous/ComfyUI/blob/master/extra_model_paths.yaml.example
+# --------------------------------------------------------------------------
+
+# Example: shared model directory accessible inside the container
+# (you would add a volume mount in docker-compose.yml first)
+#
+# shared_models:
+#   base_path: /shared/models
+#   checkpoints: checkpoints/
+#   loras: loras/
+#   vae: vae/
+#   clip: clip/
+#   controlnet: controlnet/

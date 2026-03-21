@@ -1,0 +1,83 @@
+# --------------------------------------------------------------------------------
+# ComfyUI — GPU-Accelerated Image & Video Generation
+# --------------------------------------------------------------------------------
+# Node-based workflow editor for Stable Diffusion, FLUX, WAN 2.1, and
+# other diffusion models.  GPU-accelerated via NVIDIA RTX 3090.
+#
+# Services:
+#   - comfyui:  Web UI + inference backend with full GPU passthrough.
+#
+# Networking:
+#   - Host port bound to 127.0.0.1 — not exposed to the LAN.
+#   - For remote access, use an SSH tunnel or the existing nginx reverse
+#     proxy (see vps/nginx/).
+#
+# GPU access:
+#   - ComfyUI receives full GPU reservation.  If running alongside
+#     Ollama, see guide/COMFYUI.md § GPU Coexistence for VRAM strategy.
+#
+# Usage:
+#   cp .env.example .env   # edit paths and options
+#   docker compose build
+#   docker compose up -d
+# --------------------------------------------------------------------------------
+
+services:
+  comfyui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        PYTORCH_IMAGE: ${PYTORCH_IMAGE:-pytorch/pytorch:2.10.0-cuda13.0-cudnn9-runtime}
+        COMFYUI_VERSION: ${COMFYUI_VERSION:-master}
+    image: homelab/comfyui:latest
+    container_name: comfyui
+    restart: unless-stopped
+
+    ports:
+      - "127.0.0.1:${COMFYUI_PORT:-8188}:8188"
+
+    environment:
+      - TZ=${TZ:-America/New_York}
+      - NVIDIA_VISIBLE_DEVICES=all
+      # Extra CLI arguments for ComfyUI main.py (see .env.example).
+      - COMFYUI_EXTRA_ARGS=${COMFYUI_EXTRA_ARGS:-}
+      # HuggingFace / pip cache paths inside the container.
+      - HF_HOME=/root/.cache/huggingface
+      - PIP_CACHE_DIR=/root/.cache/pip
+
+    volumes:
+      # ── Persistent data (survives image rebuilds) ──────────────────────
+      - ${COMFYUI_DATA_DIR}/models:/app/models
+      - ${COMFYUI_DATA_DIR}/custom_nodes:/app/custom_nodes
+      - ${COMFYUI_DATA_DIR}/input:/app/input
+      - ${COMFYUI_DATA_DIR}/output:/app/output
+      - ${COMFYUI_DATA_DIR}/user:/app/user
+      # ── Caches (speeds up restarts and HuggingFace downloads) ──────────
+      - ${COMFYUI_DATA_DIR}/cache/huggingface:/root/.cache/huggingface
+      - ${COMFYUI_DATA_DIR}/cache/pip:/root/.cache/pip
+      # ── Read-only config ───────────────────────────────────────────────
+      - ./config:/app/config:ro
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu, utility]
+
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8188/system_stats || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+
+    networks:
+      - comfyui
+
+networks:
+  comfyui:
+    name: comfyui
+    driver: bridge

@@ -1,11 +1,11 @@
 # Homelab Blueprint
 
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/compose/)
-[![Services](https://img.shields.io/badge/Services-13-green.svg)](#services)
+[![Services](https://img.shields.io/badge/Services-15-green.svg)](#services)
 [![Host Services](https://img.shields.io/badge/Host_Services-2-orange.svg)](#-monero-full-node--xmrig-mining)
 [![Rocky Linux](https://img.shields.io/badge/Rocky_Linux-10-10B981?logo=rockylinux&logoColor=white)](https://rockylinux.org/)
 
-Production-ready Docker Compose stacks and host service configs for a self-hosted home server — 13 Docker services + Monero full node & XMRig miner, VPS reverse-proxy architecture, Authelia 2FA, and full observability. Fork it, configure your `.env` files, and deploy.
+Production-ready Docker Compose stacks and host service configs for a self-hosted home server — 15 Docker services + Monero full node & XMRig miner, VPS reverse-proxy architecture, Authelia 2FA, local AI workloads, and full observability. Fork it, configure your `.env` files, and deploy.
 
 ---
 
@@ -17,6 +17,8 @@ Production-ready Docker Compose stacks and host service configs for a self-hoste
   - [Jellyfin](#-jellyfin--media-server)
   - [Nextcloud](#-nextcloud--personal-cloud)
   - [Code Server](#-code-server--remote-development)
+   - [AI Stack](#-ai-stack--local-llm--agent-platform)
+   - [ComfyUI](#-comfyui--image--video-generation)
   - [Apache Guacamole](#-apache-guacamole--remote-desktop-gateway)
   - [P2P / Gluetun VPN Stack](#-p2p--gluetun-vpn-stack)
   - [Minecraft Server](#-minecraft-server)
@@ -30,6 +32,10 @@ Production-ready Docker Compose stacks and host service configs for a self-hoste
   - [Monero Full Node & XMRig Mining](#%EF%B8%8F-monero-full-node--xmrig-mining)
 - [Guides](#guides)
   - [Network Architecture](NETWORK.md)
+   - [AI Stack](guide/AI_STACK.md)
+   - [ComfyUI](guide/COMFYUI.md)
+   - [AI Persona LoRA Training](guide/AI_PERSONA_TRAINING.md)
+   - [AI Persona Evaluation Checklist](guide/AI_PERSONA_EVAL.md)
   - [Nginx Reverse Proxy](guide/NGINX.md)
   - [Authelia 2FA Gateway](guide/AUTHELIA.md)
   - [VPS Hardening](guide/HARDENING.md)
@@ -50,6 +56,7 @@ This repository contains production-ready Docker Compose stacks that I use daily
 - **Isolation** — Each service lives in its own directory and can be started/stopped independently.
 - **Persistence** — All application data is bind-mounted to the host for easy backups and portability.
 - **Security** — P2P traffic is fully tunneled through a WireGuard VPN via Gluetun; services are designed to sit behind a reverse proxy.
+- **GPU sharing** — The RTX 3090 is split across local LLM inference, coding agents, and ComfyUI image/video workflows with monitoring in Grafana.
 
 ---
 
@@ -136,6 +143,52 @@ Full-stack deployment with four containers:
 - Password-protected access.
 - Persistent configuration, extensions, and workspace data.
 - Configurable default workspace directory.
+
+---
+
+### 🤖 AI Stack — Local LLM + Agent Platform
+
+> 📖 **Guide:** [Full Setup Guide](guide/AI_STACK.md)
+
+| | |
+|---|---|
+| **Directory** | `services/ai-stack/` |
+| **Images** | `ollama/ollama:latest`, `ghcr.io/open-webui/open-webui:main`, `ghcr.io/anomalyco/opencode:latest`, `openclaw/openclaw:latest`, `nvcr.io/nvidia/k8s/dcgm-exporter:*` |
+| **Purpose** | Local LLM inference, chat UI, coding agent, persona experimentation, and GPU telemetry |
+| **Ports** | `11434` (Ollama API), `8080` (Open WebUI), `4096` (OpenCode), `8081` (OpenClaw), `9400` (DCGM exporter) |
+
+Five-container deployment:
+
+| Container | Image | Role |
+|---|---|---|
+| `ai-ollama` | `ollama/ollama:latest` | GPU-accelerated local model runtime |
+| `ai-open-webui` | `ghcr.io/open-webui/open-webui:main` | Browser chat UI for local models |
+| `ai-opencode` | `ghcr.io/anomalyco/opencode:latest` | Browser-based coding agent bound to the checked-out repo |
+| `ai-openclaw` | `openclaw/openclaw:latest` | Agent layer and future persona / Discord integration point |
+| `ai-dcgm-exporter` | `nvcr.io/nvidia/k8s/dcgm-exporter:*` | Prometheus GPU exporter for the RTX 3090 |
+
+- Designed around a single NVIDIA RTX 3090 24 GB with Ollama as the shared model backend.
+- Includes Open WebUI for chat, OpenCode for browser-based repo work, and OpenClaw for agent workflows.
+- Ships helper scripts for start/stop/update, health checks, GPU power profiles, and persona LoRA training/export.
+- DCGM metrics feed directly into the existing Monitoring Stack dashboards.
+
+---
+
+### 🎨 ComfyUI — Image & Video Generation
+
+> 📖 **Guide:** [Full Setup Guide](guide/COMFYUI.md)
+
+| | |
+|---|---|
+| **Directory** | `services/comfyui/` |
+| **Image** | Custom build from `services/comfyui/Dockerfile` |
+| **Purpose** | GPU-accelerated node-based image and video generation with Stable Diffusion, FLUX, and WAN workflows |
+| **Port** | `8188` (Web UI + API) |
+
+- Runs with full NVIDIA GPU passthrough and persistent host-mounted model, workflow, cache, and output directories.
+- Uses a curated bootstrap flow with helper scripts for first-run setup, custom node installs, updates, backups, and validation.
+- Designed to coexist with the AI Stack on the same RTX 3090, with documented VRAM strategies for SDXL, FLUX, and WAN workloads.
+- Keeps monitoring responsibilities in the existing AI Stack + Monitoring Stack instead of duplicating GPU exporters.
 
 ---
 
@@ -404,13 +457,17 @@ Detailed setup guides for the infrastructure surrounding these Docker stacks:
 | Guide | Description |
 |---|---|
 | [Network Architecture](NETWORK.md) | VPN tunnel topology, domain mapping, TLS configuration, and request flow |
+| [AI Stack](guide/AI_STACK.md) | Ollama + Open WebUI + OpenCode + OpenClaw + DCGM exporter on the RTX 3090 |
+| [ComfyUI](guide/COMFYUI.md) | GPU-accelerated image and video generation with custom nodes and model strategy |
+| [AI Persona LoRA Training](guide/AI_PERSONA_TRAINING.md) | End-to-end dataset preparation, QLoRA training, GGUF export, and Ollama deployment |
+| [AI Persona Evaluation Checklist](guide/AI_PERSONA_EVAL.md) | Manual scoring rubric for promoting or rejecting persona LoRA runs |
 | [Nginx Reverse Proxy](guide/NGINX.md) | Step-by-step Nginx setup on the FreeBSD VPS with Let's Encrypt |
 | [Authelia 2FA Gateway](guide/AUTHELIA.md) | Authelia setup with YubiKey WebAuthn + TOTP backup |
 | [VPS Hardening](guide/HARDENING.md) | Fail2ban + PF firewall configuration on FreeBSD |
 | [Monitoring Stack](guide/MONITORING.md) | Grafana + Prometheus + Loki setup, dashboards, and log queries |
 | [Monero Full Node & XMRig Mining](guide/MONERO.md) | monerod setup, Ledger wallet, XMRig build & systemd config, MoneroOcean pool, Prometheus exporter |
 
-**Recommended reading order:** Network Architecture → Nginx → Authelia → Hardening → Monitoring → Monero
+**Recommended reading order:** Network Architecture → Nginx → Authelia → Hardening → Monitoring → AI Stack → ComfyUI → Monero
 
 ---
 
@@ -476,9 +533,13 @@ Detailed setup guides for the infrastructure surrounding these Docker stacks:
 ├── NETWORK.md                          # Network architecture & remote access
 ├── guide/
 │   ├── ADGUARD.md                      # AdGuard Home setup guide
+│   ├── AI_PERSONA_EVAL.md              # Persona model evaluation checklist
+│   ├── AI_PERSONA_TRAINING.md          # Persona LoRA training workflow guide
+│   ├── AI_STACK.md                     # Local LLM + agent platform guide
 │   ├── AUTHELIA.md                     # Authelia 2FA gateway setup guide
 │   ├── BENTOPDF.md                     # BentoPDF setup guide
 │   ├── CODE_SERVER.md                  # Code Server setup guide
+│   ├── COMFYUI.md                      # ComfyUI image/video generation guide
 │   ├── COOLERCONTROL.md                # CoolerControl setup guide
 │   ├── GUACAMOLE.md                    # Apache Guacamole setup guide
 │   ├── HARDENING.md                    # Fail2ban & PF firewall guide
@@ -505,10 +566,31 @@ Detailed setup guides for the infrastructure surrounding these Docker stacks:
     │   └── config/
     │       ├── configuration.example.yml   # Authelia config (template)
     │       └── users_database.example.yml  # User database (template)
+   ├── ai-stack/
+   │   ├── docker-compose.yml              # Ollama + Open WebUI + OpenCode + OpenClaw + DCGM exporter
+   │   ├── deploy-persona.sh               # Deploy GGUF persona adapter into Ollama
+   │   ├── healthcheck.sh                  # Stack health and GPU/API checks
+   │   ├── Modelfile.persona.example       # Example Ollama persona model definition
+   │   ├── promote-persona-defaults.sh     # Switch default services to a persona model
+   │   ├── set-gpu-inference.sh            # Lower GPU power profile for daily inference
+   │   ├── set-gpu-training.sh             # Raise GPU power profile for training runs
+   │   ├── start.sh                        # Start the AI stack
+   │   ├── stop.sh                         # Stop the AI stack
+   │   ├── update.sh                       # Update stack images and restart
+   │   ├── config/
+   │   │   ├── opencode/                   # OpenCode model/provider config
+   │   │   └── openclaw/                   # OpenClaw agent config
+   │   └── scripts/                        # Persona dataset, training, and export helpers
     ├── bentopdf/
     │   └── docker-compose.yml              # Privacy-first PDF toolkit
     ├── code-server/
     │   └── docker-compose.yml              # Browser-based VS Code
+   ├── comfyui/
+   │   ├── docker-compose.yml              # ComfyUI service definition
+   │   ├── Dockerfile                      # Custom ComfyUI image build
+   │   ├── config/
+   │   │   └── extra_model_paths.example.yaml  # Optional shared model paths
+   │   └── scripts/                        # Init, backup, update, and validation helpers
     ├── coolercontrol/
     │   └── docker-compose.yml              # Hardware fan/cooling control
     ├── guacamole/
@@ -610,6 +692,43 @@ Each service reads its configuration from a `.env` file in its respective direct
 | `CODE_SERVER_DEFAULT_WORKSPACE` | Default workspace path |
 | `CODE_SERVER_CONFIG_DIR` | Host path for config data |
 | `CODE_SERVER_HTTP_PORT` | Host port for web UI |
+
+</details>
+
+<details>
+<summary><strong>🤖 AI Stack</strong></summary>
+
+| Variable | Description |
+|---|---|
+| `AI_ACTIVE_DATA_DIR` | Host path for active AI data: Ollama models, Open WebUI state, OpenCode state, adapters, training workspace |
+| `AI_ARCHIVE_DATA_DIR` | Host path for cold storage: raw datasets, archived runs, old adapters, long-term backups |
+| `OLLAMA_PORT` | Host port for the Ollama API |
+| `OPEN_WEBUI_PORT` | Host port for the Open WebUI interface |
+| `OPEN_WEBUI_SECRET_KEY` | Session and secret key for Open WebUI |
+| `OPEN_WEBUI_ENABLE_SIGNUP` | Enable or disable self-service account creation |
+| `OPENCLAW_PORT` | Host port for the OpenClaw API/UI |
+| `OPENCLAW_DEFAULT_MODEL` | Default model OpenClaw should request from Ollama |
+| `OPENCODE_PORT` | Host port for the OpenCode web UI |
+| `OPENCODE_SERVER_USERNAME` | Basic auth username for OpenCode |
+| `OPENCODE_SERVER_PASSWORD` | Basic auth password for OpenCode |
+| `OPENCODE_MODEL` | Primary coding model used by OpenCode |
+| `OPENCODE_SMALL_MODEL` | Secondary lightweight model used by OpenCode |
+| `DCGM_EXPORTER_PORT` | Host port for the NVIDIA DCGM Prometheus exporter |
+| `AI_TRAINING_IMAGE` | Optional training image used by the opt-in persona training profile |
+| `LLAMA_CPP_DIR` | Local checkout path for `llama.cpp` export tooling |
+
+</details>
+
+<details>
+<summary><strong>🎨 ComfyUI</strong></summary>
+
+| Variable | Description |
+|---|---|
+| `COMFYUI_DATA_DIR` | Host path for ComfyUI models, custom nodes, cache, user data, inputs, and outputs |
+| `COMFYUI_PORT` | Host port for the ComfyUI web UI and API |
+| `PYTORCH_IMAGE` | PyTorch CUDA base image used to build the ComfyUI container |
+| `COMFYUI_VERSION` | ComfyUI git ref to build (`master`, tag, or commit) |
+| `COMFYUI_EXTRA_ARGS` | Extra CLI arguments passed to ComfyUI at runtime |
 
 </details>
 
