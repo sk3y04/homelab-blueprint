@@ -32,6 +32,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libxext6 \
         libxrender1 \
         libgomp1 \
+    python3-venv \
     && rm -rf /var/lib/apt/lists/*
 
 # Clone ComfyUI — pinnable via build arg
@@ -41,6 +42,14 @@ RUN git clone https://github.com/comfyanonymous/ComfyUI.git /app \
     && if [ "${COMFYUI_VERSION}" != "master" ]; then git checkout "${COMFYUI_VERSION}"; fi
 
 WORKDIR /app
+
+ENV VIRTUAL_ENV=/opt/venv
+ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
+
+# Install Python dependencies into an isolated virtualenv so Ubuntu's
+# externally managed system Python does not block pip installs.
+RUN python3 -m venv "${VIRTUAL_ENV}" \
+    && pip install --no-cache-dir --upgrade pip setuptools wheel
 
 # Install ComfyUI Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
