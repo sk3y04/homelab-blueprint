@@ -153,7 +153,7 @@ Full-stack deployment with four containers:
 | | |
 |---|---|
 | **Directory** | `services/ai-stack/` |
-| **Images** | `ollama/ollama:latest`, `ghcr.io/open-webui/open-webui:main`, `ghcr.io/anomalyco/opencode:latest`, `openclaw/openclaw:latest`, `nvcr.io/nvidia/k8s/dcgm-exporter:*` |
+| **Images** | `ollama/ollama:latest`, `ghcr.io/open-webui/open-webui:main`, `ghcr.io/anomalyco/opencode:latest`, `ghcr.io/openclaw/openclaw:latest` (optional profile), `nvcr.io/nvidia/k8s/dcgm-exporter:*` |
 | **Purpose** | Local LLM inference, chat UI, coding agent, persona experimentation, and GPU telemetry |
 | **Ports** | `11434` (Ollama API), `8080` (Open WebUI), `4096` (OpenCode), `8081` (OpenClaw), `9400` (DCGM exporter) |
 
@@ -164,11 +164,11 @@ Five-container deployment:
 | `ai-ollama` | `ollama/ollama:latest` | GPU-accelerated local model runtime |
 | `ai-open-webui` | `ghcr.io/open-webui/open-webui:main` | Browser chat UI for local models |
 | `ai-opencode` | `ghcr.io/anomalyco/opencode:latest` | Browser-based coding agent bound to the checked-out repo |
-| `ai-openclaw` | `openclaw/openclaw:latest` | Agent layer and future persona / Discord integration point |
+| `ai-openclaw` | `ghcr.io/openclaw/openclaw:latest` | Optional profile for experimental agent / Discord integration |
 | `ai-dcgm-exporter` | `nvcr.io/nvidia/k8s/dcgm-exporter:*` | Prometheus GPU exporter for the RTX 3090 |
 
 - Designed around a single NVIDIA RTX 3090 24 GB with Ollama as the shared model backend.
-- Includes Open WebUI for chat, OpenCode for browser-based repo work, and OpenClaw for agent workflows.
+- Includes Open WebUI for chat and OpenCode for browser-based repo work; OpenClaw is available as an optional experimental profile.
 - Ships helper scripts for start/stop/update, health checks, GPU power profiles, and persona LoRA training/export.
 - DCGM metrics feed directly into the existing Monitoring Stack dashboards.
 

@@ -688,7 +688,7 @@ ssh -L 8080:127.0.0.1:8080 user@homeserver
 |----------|------------|------------|
 | `OPEN_WEBUI_SECRET_KEY` | High — session encryption | `openssl rand -hex 32` |
 | `OPENCODE_SERVER_PASSWORD` | High — OpenCode web/API login | `openssl rand -base64 24` |
-| `OPENCLAW_IMAGE` | Low — image reference | N/A |
+| `OPENCLAW_IMAGE` | Low — optional profile image reference | N/A |
 
 Discord bot tokens (future) should also go in `.env`, never in committed config files.
 
@@ -812,19 +812,30 @@ docker inspect ai-ollama --format='{{json .NetworkSettings.Networks}}' | python3
 docker inspect ai-open-webui --format='{{json .NetworkSettings.Networks}}' | python3 -m json.tool
 ```
 
-### OpenClaw image not found
+### OpenClaw is optional and not part of the default boot path
 
-OpenClaw may not have an official Docker image yet. If `docker pull` fails:
+The default `docker compose up -d` path in this repo intentionally skips
+OpenClaw. It is behind the `openclaw` profile because upstream OpenClaw uses a
+different gateway-first Docker layout than the rest of this homelab stack.
 
-1. Comment out the `openclaw` service in `docker-compose.yml`
-2. Use Open WebUI's built-in Tools/Functions feature as an interim agent layer
-3. Check https://github.com/openclaw for the latest installation instructions
-4. If OpenClaw is installed from source, build a local image:
-   ```bash
-   git clone https://github.com/openclaw/openclaw.git /opt/openclaw
-   cd /opt/openclaw
-   docker build -t openclaw/openclaw:latest .
-   ```
+Default startup:
+
+```bash
+docker compose up -d
+```
+
+Experimental opt-in startup:
+
+```bash
+docker compose --profile openclaw up -d openclaw
+```
+
+If you want a full upstream-supported OpenClaw deployment instead of this
+experimental profile, follow the official Docker guide and published GHCR image:
+
+1. Use `ghcr.io/openclaw/openclaw:latest` or a pinned release tag.
+2. Follow https://docs.openclaw.ai/install/docker for the gateway + CLI layout.
+3. Use Open WebUI and OpenCode as the default local interfaces in this repo until you have validated the OpenClaw gateway configuration on your host.
 
 ### OpenCode starts but the UI is blank or models are missing
 

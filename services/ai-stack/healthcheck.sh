@@ -23,6 +23,10 @@ DCGM_EXPORTER_PORT=${DCGM_EXPORTER_PORT:-9400}
 OPENCODE_USERNAME=${OPENCODE_SERVER_USERNAME:-opencode}
 OPENCODE_PASSWORD=${OPENCODE_SERVER_PASSWORD:-}
 
+has_container() {
+  docker inspect "$1" >/dev/null 2>&1
+}
+
 echo "=== AI Stack Health Check ==="
 echo ""
 
@@ -32,7 +36,7 @@ docker compose ps --format "table {{.Name}}\t{{.Status}}"
 echo ""
 
 # Check each service individually.
-for svc in ollama open-webui opencode openclaw dcgm-exporter; do
+for svc in ollama open-webui opencode dcgm-exporter; do
   container="ai-${svc}"
   status=$(docker inspect --format='{{.State.Health.Status}}' "$container" 2>/dev/null || echo "not-found")
   case "$status" in
@@ -42,6 +46,18 @@ for svc in ollama open-webui opencode openclaw dcgm-exporter; do
     *)         printf "  ✗ %-20s %s\n" "$container" "$status"; FAIL=1 ;;
   esac
 done
+
+if has_container ai-openclaw; then
+  status=$(docker inspect --format='{{.State.Health.Status}}' ai-openclaw 2>/dev/null || echo "not-found")
+  case "$status" in
+    healthy)   printf "  ✓ %-20s healthy\n" "ai-openclaw" ;;
+    unhealthy) printf "  ✗ %-20s UNHEALTHY\n" "ai-openclaw"; FAIL=1 ;;
+    starting)  printf "  … %-20s starting\n" "ai-openclaw" ;;
+    *)         printf "  ✗ %-20s %s\n" "ai-openclaw" "$status"; FAIL=1 ;;
+  esac
+else
+  printf "  - %-20s not enabled (optional profile)\n" "ai-openclaw"
+fi
 echo ""
 
 # ── Ollama API ───────────────────────────────────────────────────────────

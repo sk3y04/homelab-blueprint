@@ -160,23 +160,22 @@ services:
     networks:
       - ai-stack
 
-  # ── OpenClaw — Agent Layer ──────────────────────────────────────────────
-  # AI agent framework connected to Ollama via OpenAI-compatible API.
-  # Prepares the path for Discord integration and persona models.
+  # ── OpenClaw — Optional Agent Layer ────────────────────────────────────
+  # This service is disabled by default behind the `openclaw` profile.
+  # The upstream OpenClaw Docker deployment uses a different gateway-first
+  # compose layout than this homelab stack, so treat this service as an
+  # experimental integration point rather than part of the default boot set.
   #
-  # ╔══════════════════════════════════════════════════════════════════════╗
-  # ║  IMAGE VERIFICATION REQUIRED                                       ║
-  # ║  The image below is a best-guess. Before first startup, verify     ║
-  # ║  the correct image name and tag:                                   ║
-  # ║    docker search openclaw                                          ║
-  # ║    # or check: https://github.com/openclaw                        ║
-  # ║  If the image does not exist, comment out this service and use     ║
-  # ║  Open WebUI's built-in agent/tool features as an interim.         ║
-  # ╚══════════════════════════════════════════════════════════════════════╝
+  # Default startup (safe):
+  #   docker compose up -d
+  #
+  # Opt-in startup (experimental):
+  #   docker compose --profile openclaw up -d openclaw
   openclaw:
-    image: ${OPENCLAW_IMAGE:-openclaw/openclaw:latest}
+    image: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:latest}
     container_name: ai-openclaw
     restart: unless-stopped
+    profiles: ["openclaw"]
 
     depends_on:
       ollama:

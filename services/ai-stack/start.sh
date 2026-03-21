@@ -24,7 +24,11 @@ fi
 
 if [ $# -gt 0 ]; then
   echo "Starting AI stack service: $*"
-  docker compose up -d "$@"
+  if [[ " $* " == *" openclaw "* ]]; then
+    docker compose --profile openclaw up -d "$@"
+  else
+    docker compose up -d "$@"
+  fi
 else
   echo "Starting AI stack..."
   docker compose up -d
@@ -33,3 +37,6 @@ fi
 echo ""
 echo "Services:"
 docker compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
+echo ""
+echo "Note: OpenClaw is profile-gated and is not started by default."
+echo "      To start it explicitly: docker compose --profile openclaw up -d openclaw"
