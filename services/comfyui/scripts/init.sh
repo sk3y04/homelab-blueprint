@@ -24,10 +24,9 @@ fi
 echo ""
 
 # Load environment
-set -a
 # shellcheck source=/dev/null
-source .env
-set +a
+source ./scripts/load-env.sh
+load_dotenv .env
 
 DATA_DIR="${COMFYUI_DATA_DIR:-/opt/comfyui/data}"
 PYTORCH_IMAGE="${PYTORCH_IMAGE:-pytorch/pytorch:2.10.0-cuda13.0-cudnn9-runtime}"

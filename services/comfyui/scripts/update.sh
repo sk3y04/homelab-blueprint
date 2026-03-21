@@ -13,10 +13,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-set -a
 # shellcheck source=/dev/null
-source .env
-set +a
+source ./scripts/load-env.sh
+load_dotenv .env
 
 DATA_DIR="${COMFYUI_DATA_DIR:-/opt/comfyui/data}"
 UPDATE_NODES=false
