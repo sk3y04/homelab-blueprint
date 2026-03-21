@@ -11,6 +11,20 @@ set -euo pipefail
 CUSTOM_NODES_DIR="/app/custom_nodes"
 MANAGER_DIR="${CUSTOM_NODES_DIR}/ComfyUI-Manager"
 
+clone_repo() {
+  local repo_url="$1"
+  local target_dir="$2"
+  local label="$3"
+
+  if timeout 180 git clone --depth 1 "$repo_url" "$target_dir"; then
+    return 0
+  fi
+
+  echo "[entrypoint] WARNING: Failed to clone ${label}; continuing without it"
+  rm -rf "$target_dir"
+  return 1
+}
+
 # ── Ensure model subdirectories exist ────────────────────────────────────
 echo "[entrypoint] Ensuring model subdirectories..."
 mkdir -p /app/models/{checkpoints,clip,clip_vision,controlnet,diffusion_models,embeddings,loras,text_encoders,unet,upscale_models,vae}
@@ -18,7 +32,7 @@ mkdir -p /app/models/{checkpoints,clip,clip_vision,controlnet,diffusion_models,e
 # ── Ensure ComfyUI Manager is installed ──────────────────────────────────
 if [ ! -d "${MANAGER_DIR}" ]; then
   echo "[entrypoint] ComfyUI Manager not found — cloning..."
-  git clone https://github.com/ltdrdata/ComfyUI-Manager.git "${MANAGER_DIR}"
+  clone_repo "https://github.com/ltdrdata/ComfyUI-Manager.git" "${MANAGER_DIR}" "ComfyUI Manager" || true
 fi
 
 # Install Manager dependencies if present
