@@ -67,8 +67,11 @@ echo ""
 
 # ── ComfyUI Manager ─────────────────────────────────────────────────────
 echo "── ComfyUI Manager ──"
-if [ -d "${DATA_DIR}/custom_nodes/ComfyUI-Manager" ]; then
+if [ -f "${DATA_DIR}/custom_nodes/ComfyUI-Manager/__init__.py" ]; then
   echo "  ✓ Installed"
+elif [ -d "${DATA_DIR}/custom_nodes/ComfyUI-Manager" ]; then
+  echo "  ✗ Directory exists, but install is incomplete (__init__.py missing)"
+  FAIL=1
 else
   echo "  ✗ NOT found in custom_nodes/"
   FAIL=1

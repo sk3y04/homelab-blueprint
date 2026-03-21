@@ -11,6 +11,10 @@ set -euo pipefail
 CUSTOM_NODES_DIR="/app/custom_nodes"
 MANAGER_DIR="${CUSTOM_NODES_DIR}/ComfyUI-Manager"
 
+manager_is_valid() {
+  [ -f "${MANAGER_DIR}/__init__.py" ]
+}
+
 clone_repo() {
   local repo_url="$1"
   local target_dir="$2"
@@ -30,7 +34,12 @@ echo "[entrypoint] Ensuring model subdirectories..."
 mkdir -p /app/models/{checkpoints,clip,clip_vision,controlnet,diffusion_models,embeddings,loras,text_encoders,unet,upscale_models,vae}
 
 # ── Ensure ComfyUI Manager is installed ──────────────────────────────────
-if [ ! -d "${MANAGER_DIR}" ]; then
+if [ -e "${MANAGER_DIR}" ] && ! manager_is_valid; then
+  echo "[entrypoint] ComfyUI Manager directory is incomplete — removing broken copy..."
+  rm -rf "${MANAGER_DIR}"
+fi
+
+if ! manager_is_valid; then
   echo "[entrypoint] ComfyUI Manager not found — cloning..."
   clone_repo "https://github.com/ltdrdata/ComfyUI-Manager.git" "${MANAGER_DIR}" "ComfyUI Manager" || true
 fi
