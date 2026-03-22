@@ -20,9 +20,15 @@ FROM ${PYTORCH_IMAGE}
 ENV DEBIAN_FRONTEND=noninteractive
 
 # System dependencies required by ComfyUI core and common custom nodes
-# (opencv, ffmpeg for video workflows, GL libs for image processing).
+# (opencv, ffmpeg for video workflows, GL libs for image processing,
+# and build tools for Python packages with native extensions such as
+# insightface used by some custom nodes).
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
         git \
+    pkg-config \
+    python3-dev \
         wget \
         curl \
         ffmpeg \
