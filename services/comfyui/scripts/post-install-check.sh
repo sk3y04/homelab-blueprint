@@ -70,6 +70,8 @@ if [ -f "${DATA_DIR}/custom_nodes/ComfyUI-Manager/__init__.py" ]; then
   echo "  ✓ Installed"
 elif [ -d "${DATA_DIR}/custom_nodes/ComfyUI-Manager" ]; then
   echo "  ✗ Directory exists, but install is incomplete (__init__.py missing)"
+  echo "    Restart ComfyUI to let the entrypoint remove and re-clone it."
+  echo "    If it still fails, remove it manually: rm -rf ${DATA_DIR}/custom_nodes/ComfyUI-Manager"
   FAIL=1
 else
   echo "  ✗ NOT found in custom_nodes/"

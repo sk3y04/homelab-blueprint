@@ -8,9 +8,9 @@
 #   - comfyui:  Web UI + inference backend with full GPU passthrough.
 #
 # Networking:
-#   - Host port bound to 127.0.0.1 — not exposed to the LAN.
-#   - For remote access, use an SSH tunnel or the existing nginx reverse
-#     proxy (see vps/nginx/).
+#   - Host port published on all host interfaces for LAN access.
+#   - Restrict with your host firewall or a reverse proxy if broader
+#     exposure is not intended.
 #
 # GPU access:
 #   - ComfyUI receives full GPU reservation.  If running alongside
@@ -35,7 +35,7 @@ services:
     restart: unless-stopped
 
     ports:
-      - "127.0.0.1:${COMFYUI_PORT:-8188}:8188"
+      - "${COMFYUI_PORT:-8188}:8188"
 
     environment:
       - TZ=${TZ:-America/New_York}

@@ -59,7 +59,7 @@ You ──► browser ──┤   ComfyUI      │
 │  comfyui:8188                                                 │
 └───────────────────────────────────────────────────────────────┘
          │
-         └── Host port (127.0.0.1):
+     └── Host port (all host interfaces):
                :8188   ComfyUI Web UI + API
 ```
 
@@ -155,14 +155,9 @@ This will:
 
 ### Stage 2 — Verify the UI
 
-Open `http://127.0.0.1:8188` in your browser.  You should see the ComfyUI
-node editor.  The default workflow will fail because no models are loaded
-yet — this is expected.
-
-If accessing from another machine, use an SSH tunnel:
-```bash
-ssh -L 8188:127.0.0.1:8188 user@your-server
-```
+Open `http://<host-ip>:8188` in your browser.  You should see the ComfyUI
+node editor from the host itself or any client on the same LAN.  The default
+workflow will fail because no models are loaded yet — this is expected.
 
 ### Stage 3 — Install custom nodes
 
@@ -390,7 +385,7 @@ and captioning within ComfyUI workflows (not direct image generation).
 After placing models, verify ComfyUI finds them:
 1. Restart ComfyUI: `docker compose restart comfyui`
 2. In the UI, the model loader nodes should list your models in their dropdowns.
-3. Or check the API: `curl http://127.0.0.1:8188/object_info` (search for your model name).
+3. Or check the API: `curl http://<host-ip>:8188/object_info` (search for your model name).
 
 ---
 
@@ -432,14 +427,14 @@ manually:
 
 - [ ] Container `comfyui` is running and healthy
 - [ ] `nvidia-smi` works inside the container and shows RTX 3090
-- [ ] ComfyUI API responds at `http://127.0.0.1:8188/system_stats`
+- [ ] ComfyUI API responds at `http://<host-ip>:8188/system_stats`
 - [ ] GPU is listed in system_stats with ~24 GB VRAM
 - [ ] ComfyUI-Manager is present in `custom_nodes/`
 - [ ] xformers is importable inside the container
 - [ ] PyTorch reports CUDA available (`torch.cuda.is_available() == True`)
 - [ ] All model subdirectories exist under `models/`
 - [ ] At least one checkpoint is placed in `models/checkpoints/` (for testing)
-- [ ] UI loads in browser at `http://127.0.0.1:8188`
+- [ ] UI loads in browser at `http://<host-ip>:8188`
 - [ ] A test generation completes successfully with the checkpoint
 - [ ] Output images appear in `/opt/comfyui/data/output/`
 - [ ] Logs show no Python import errors: `docker compose logs comfyui | grep -i error`
@@ -631,13 +626,8 @@ cd ../ai-stack && ./stop.sh ollama
 Port binding issue.  Check:
 ```bash
 docker compose ps
-# Verify port is 127.0.0.1:8188->8188
+# Verify port is 0.0.0.0:8188->8188 or :::8188->8188
 docker compose logs comfyui | grep "listen"
-```
-
-If accessing from another machine, you need an SSH tunnel:
-```bash
-ssh -L 8188:127.0.0.1:8188 user@your-server
 ```
 
 ### "Module not found" errors for custom nodes
