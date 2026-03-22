@@ -77,13 +77,23 @@ fi
 
 # ── Install requirements for any custom nodes ────────────────────────────
 echo "[entrypoint] Checking custom node dependencies..."
-for req in "${CUSTOM_NODES_DIR}"/*/requirements.txt; do
-  [ -f "$req" ] || continue
-  node_name=$(basename "$(dirname "$req")")
+for node_dir in "${CUSTOM_NODES_DIR}"/*; do
+  [ -d "$node_dir" ] || continue
+  node_name=$(basename "$node_dir")
   # Skip Manager — already handled above
   [ "$node_name" = "ComfyUI-Manager" ] && continue
+
+  if [ -f "$node_dir/install.py" ]; then
+    echo "[entrypoint]   Running installer for ${node_name}..."
+    python "$node_dir/install.py" \
+      || echo "[entrypoint]   WARNING: Installer failed for ${node_name}"
+    continue
+  fi
+
+  req="$node_dir/requirements.txt"
+  [ -f "$req" ] || continue
   echo "[entrypoint]   Installing deps for ${node_name}..."
-  pip install --no-cache-dir -r "$req" 2>/dev/null \
+  pip install --no-cache-dir -r "$req" \
     || echo "[entrypoint]   WARNING: Failed to install some deps for ${node_name}"
 done
 
