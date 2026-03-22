@@ -92,18 +92,24 @@ install_node() {
   local name
   name=$(basename "$url" .git)
   local target="${CUSTOM_NODES_DIR}/${name}"
+  local clone_log
+  clone_log=$(mktemp)
 
   if [ -d "$target" ]; then
     echo "  ✓ ${name} — already installed."
+    rm -f "$clone_log"
     return 0
   fi
 
   echo -n "  ↓ ${name} — cloning... "
-  if git clone --depth 1 "$url" "$target" 2>/dev/null; then
+  if git clone --depth 1 "$url" "$target" >"$clone_log" 2>&1; then
     echo "done."
+    rm -f "$clone_log"
   else
     echo "FAILED."
+    sed 's/^/    /' "$clone_log"
     echo "    Verify URL: ${url}"
+    rm -f "$clone_log"
     return 1
   fi
 }
@@ -124,14 +130,14 @@ mkdir -p "$CUSTOM_NODES_DIR"
 echo "── Core nodes ──"
 fail_count=0
 for url in "${CORE_NODES[@]}"; do
-  install_node "$url" || ((fail_count++))
+  install_node "$url" || ((fail_count+=1))
 done
 echo ""
 
 if [ "${1:-}" = "--all" ]; then
   echo "── Optional nodes ──"
   for url in "${OPTIONAL_NODES[@]}"; do
-    install_node "$url" || ((fail_count++))
+    install_node "$url" || ((fail_count+=1))
   done
   echo ""
 fi
