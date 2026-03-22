@@ -55,7 +55,7 @@ ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
 # Install Python dependencies into an isolated virtualenv so Ubuntu's
 # externally managed system Python does not block pip installs.
 RUN python3 -m venv "${VIRTUAL_ENV}" \
-    && pip install --no-cache-dir --upgrade pip setuptools wheel
+    && pip install --no-cache-dir --upgrade pip setuptools wheel Cython
 
 # Install ComfyUI Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
