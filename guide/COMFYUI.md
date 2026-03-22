@@ -153,6 +153,10 @@ This will:
 5. Start the container
 6. Wait for the health check to pass
 
+If you want host-side scripts to manage `custom_nodes/` directly on Linux,
+set `HOST_UID` and `HOST_GID` in `.env` to your account's numeric UID/GID
+before starting the container.  This prevents root-owned bind-mounted files.
+
 ### Stage 2 — Verify the UI
 
 Open `http://<host-ip>:8188` in your browser.  You should see the ComfyUI
@@ -168,6 +172,16 @@ workflow will fail because no models are loaded yet — this is expected.
 
 # Restart to load new nodes
 docker compose restart comfyui
+```
+
+If the installer reports `Permission denied` under `custom_nodes/`, either:
+```bash
+sudo chown -R $(id -u):$(id -g) "$COMFYUI_DATA_DIR/custom_nodes"
+```
+or set `HOST_UID` / `HOST_GID` in `.env` and recreate the container:
+```bash
+docker compose down
+docker compose up -d
 ```
 
 ### Stage 4 — Place models

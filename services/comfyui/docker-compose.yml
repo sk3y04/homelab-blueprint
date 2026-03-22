@@ -40,6 +40,8 @@ services:
     environment:
       - TZ=${TZ:-America/New_York}
       - NVIDIA_VISIBLE_DEVICES=all
+      - HOST_UID=${HOST_UID:-}
+      - HOST_GID=${HOST_GID:-}
       # Extra CLI arguments for ComfyUI main.py (see .env.example).
       - COMFYUI_EXTRA_ARGS=${COMFYUI_EXTRA_ARGS:-}
       # HuggingFace / pip cache paths inside the container.

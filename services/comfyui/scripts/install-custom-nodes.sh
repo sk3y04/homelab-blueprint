@@ -127,6 +127,21 @@ echo ""
 
 mkdir -p "$CUSTOM_NODES_DIR"
 
+if [ ! -w "$CUSTOM_NODES_DIR" ]; then
+  echo "ERROR: ${CUSTOM_NODES_DIR} is not writable by $(id -un)."
+  echo ""
+  echo "This usually means the container created the bind-mounted directory as root."
+  echo ""
+  echo "Fix one of these ways:"
+  echo "  1. Correct ownership on the host:"
+  echo "     sudo chown -R $(id -u):$(id -g) ${CUSTOM_NODES_DIR}"
+  echo "  2. Set HOST_UID/HOST_GID in .env, then recreate ComfyUI so the entrypoint aligns ownership:"
+  echo "     HOST_UID=$(id -u)"
+  echo "     HOST_GID=$(id -g)"
+  echo "     docker compose down && docker compose up -d"
+  exit 1
+fi
+
 echo "── Core nodes ──"
 fail_count=0
 for url in "${CORE_NODES[@]}"; do

@@ -11,6 +11,30 @@ set -euo pipefail
 CUSTOM_NODES_DIR="/app/custom_nodes"
 MANAGER_DIR="${CUSTOM_NODES_DIR}/ComfyUI-Manager"
 
+align_host_permissions() {
+  if [ -z "${HOST_UID:-}" ] || [ -z "${HOST_GID:-}" ]; then
+    return 0
+  fi
+
+  if ! [[ "${HOST_UID}" =~ ^[0-9]+$ && "${HOST_GID}" =~ ^[0-9]+$ ]]; then
+    echo "[entrypoint] WARNING: HOST_UID/HOST_GID must be numeric; skipping ownership alignment"
+    return 0
+  fi
+
+  echo "[entrypoint] Aligning writable bind mounts to ${HOST_UID}:${HOST_GID}..."
+  chown "${HOST_UID}:${HOST_GID}" /app/custom_nodes /app/input /app/output /app/user /app/models 2>/dev/null || true
+
+  for path in /app/models/*; do
+    [ -e "$path" ] || continue
+    chown "${HOST_UID}:${HOST_GID}" "$path" 2>/dev/null || true
+  done
+
+  for path in /app/custom_nodes/* /app/input/* /app/output/* /app/user/*; do
+    [ -e "$path" ] || continue
+    chown -R "${HOST_UID}:${HOST_GID}" "$path" 2>/dev/null || true
+  done
+}
+
 manager_is_valid() {
   [ -f "${MANAGER_DIR}/__init__.py" ]
 }
@@ -32,6 +56,7 @@ clone_repo() {
 # ── Ensure model subdirectories exist ────────────────────────────────────
 echo "[entrypoint] Ensuring model subdirectories..."
 mkdir -p /app/models/{checkpoints,clip,clip_vision,controlnet,diffusion_models,embeddings,loras,text_encoders,unet,upscale_models,vae}
+align_host_permissions
 
 # ── Ensure ComfyUI Manager is installed ──────────────────────────────────
 if [ -e "${MANAGER_DIR}" ] && ! manager_is_valid; then
