@@ -6,7 +6,7 @@
 #   ./scripts/export_persona_adapter.sh \
 #     --adapter-dir /opt/ai-stack/data/training/runs/persona-v1-qwen35-9b \
 #     --output-file /opt/ai-stack/data/training/exports/persona-adapter.gguf \
-#     --base-model Qwen/Qwen3.5-9B-Instruct \
+#     --base-model Qwen/Qwen3.5-9B \
 #     --llama-cpp-dir /opt/llama.cpp
 # --------------------------------------------------------------------------
 set -euo pipefail
@@ -19,7 +19,7 @@ Usage:
   ./scripts/export_persona_adapter.sh \
     --adapter-dir /opt/ai-stack/data/training/runs/persona-v1-qwen35-9b \
     --output-file /opt/ai-stack/data/training/exports/persona-adapter.gguf \
-    --base-model Qwen/Qwen3.5-9B-Instruct \
+    --base-model Qwen/Qwen3.5-9B \
     --llama-cpp-dir /opt/llama.cpp
 EOF
 }

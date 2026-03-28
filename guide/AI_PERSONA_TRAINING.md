@@ -562,6 +562,10 @@ Outputs:
    docker compose --profile training run --rm training
    ```
 
+   The training service now starts as `root` and auto-normalizes
+   `transformers` to `5.2.0` for the `Qwen/Qwen3.5-9B` workflow before dropping
+   you into a shell.
+
 2. Mount:
 
 - processed dataset directory
@@ -575,7 +579,7 @@ The repository now includes a baseline Unsloth training script:
 
 ```bash
 python /repo/services/ai-stack/scripts/train_persona_unsloth.py \
-   --model-name Qwen/Qwen3.5-9B-Instruct \
+   --model-name Qwen/Qwen3.5-9B \
    --train-file /workspace/processed/persona-v1/train.jsonl \
    --valid-file /workspace/processed/persona-v1/valid.jsonl \
    --output-dir /workspace/runs/persona-v1-qwen35-9b \
@@ -589,8 +593,15 @@ python /repo/services/ai-stack/scripts/train_persona_unsloth.py \
    --lora-dropout 0.05
 ```
 
-Adjust the Hugging Face model ID if the upstream Qwen naming differs from the
-example above.
+If you need to do the dependency adjustment manually, the equivalent commands are:
+
+```bash
+pip uninstall -y transformers
+pip install --no-cache-dir "transformers==5.2.0"
+```
+
+This can leave the bundled `vllm` package version-mismatched inside the training
+container, which is acceptable for a training-only session.
 
 ### Phase 4: Evaluate the result
 
@@ -696,7 +707,7 @@ cd services/ai-stack
 ./scripts/export_persona_adapter.sh \
    --adapter-dir /opt/ai-stack/data/training/runs/persona-v1-qwen35-9b \
    --output-file /opt/ai-stack/data/training/exports/persona-adapter.gguf \
-   --base-model Qwen/Qwen3.5-9B-Instruct \
+   --base-model Qwen/Qwen3.5-9B \
    --llama-cpp-dir /opt/llama.cpp
 ```
 
@@ -891,7 +902,7 @@ docker compose --profile training run --rm training
 
 # 6. Run baseline training inside the container
 python /repo/services/ai-stack/scripts/train_persona_unsloth.py \
-   --model-name Qwen/Qwen3.5-9B-Instruct \
+   --model-name Qwen/Qwen3.5-9B \
    --train-file /workspace/processed/persona-v1/train.jsonl \
    --valid-file /workspace/processed/persona-v1/valid.jsonl \
    --output-dir /workspace/runs/persona-v1-qwen35-9b
@@ -902,7 +913,7 @@ cd services/ai-stack
 ./scripts/export_persona_adapter.sh \
   --adapter-dir /opt/ai-stack/data/training/runs/persona-v1-qwen35-9b \
   --output-file /opt/ai-stack/data/training/exports/persona-adapter.gguf \
-  --base-model Qwen/Qwen3.5-9B-Instruct \
+   --base-model Qwen/Qwen3.5-9B \
   --llama-cpp-dir /opt/llama.cpp
 
 # 8. Copy it into the live adapter path

@@ -164,6 +164,27 @@ docker compose --profile training run --rm training
 This container is the intended place to run the Unsloth training script and the
 GGUF export tooling.
 
+The training service now starts as `root` and auto-normalizes `transformers`
+for the Qwen3.5 workflow before dropping you into a shell.
+
+Default behavior:
+
+- runs as `root` so the `/repo` bind mount is readable in the container
+- normalizes `transformers` to `5.2.0` for `Qwen/Qwen3.5-9B`
+
+These defaults come from `services/ai-stack/docker-compose.yml` and can be
+changed through `.env` if needed.
+
+If you need to do the dependency adjustment manually, the equivalent commands are:
+
+```bash
+pip uninstall -y transformers
+pip install --no-cache-dir "transformers==5.2.0"
+```
+
+This can leave the container's bundled `vllm` package in a version-conflict
+state, which is acceptable for a training-only session.
+
 ---
 
 ## Step 5: Train the Baseline Adapter
@@ -172,7 +193,7 @@ Inside the training container, run one conservative baseline first:
 
 ```bash
 python /repo/services/ai-stack/scripts/train_persona_unsloth.py \
-  --model-name Qwen/Qwen3.5-9B-Instruct \
+  --model-name Qwen/Qwen3.5-9B \
   --train-file /workspace/processed/persona-v1/train.jsonl \
   --valid-file /workspace/processed/persona-v1/valid.jsonl \
   --output-dir /workspace/runs/persona-v1-qwen35-9b \
@@ -248,7 +269,7 @@ cd services/ai-stack
 ./scripts/export_persona_adapter.sh \
   --adapter-dir /opt/ai-stack/data/training/runs/persona-v1-qwen35-9b \
   --output-file /opt/ai-stack/data/training/exports/persona-adapter.gguf \
-  --base-model Qwen/Qwen3.5-9B-Instruct \
+  --base-model Qwen/Qwen3.5-9B \
   --llama-cpp-dir /opt/llama.cpp
 ```
 
@@ -383,7 +404,7 @@ python services/ai-stack/scripts/build_persona_dataset.py \
 docker compose --profile training run --rm training
 
 python /repo/services/ai-stack/scripts/train_persona_unsloth.py \
-  --model-name Qwen/Qwen3.5-9B-Instruct \
+  --model-name Qwen/Qwen3.5-9B \
   --train-file /workspace/processed/persona-v1/train.jsonl \
   --valid-file /workspace/processed/persona-v1/valid.jsonl \
   --output-dir /workspace/runs/persona-v1-qwen35-9b \
@@ -401,7 +422,7 @@ cd /repo/services/ai-stack
 ./scripts/export_persona_adapter.sh \
   --adapter-dir /opt/ai-stack/data/training/runs/persona-v1-qwen35-9b \
   --output-file /opt/ai-stack/data/training/exports/persona-adapter.gguf \
-  --base-model Qwen/Qwen3.5-9B-Instruct \
+  --base-model Qwen/Qwen3.5-9B \
   --llama-cpp-dir /opt/llama.cpp
 ./deploy-persona.sh --model-name persona --force
 ./promote-persona-defaults.sh --model-name persona --recreate

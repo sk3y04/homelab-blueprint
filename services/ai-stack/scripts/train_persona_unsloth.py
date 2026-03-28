@@ -117,19 +117,20 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def load_runtime_dependencies() -> tuple[Any, Any, Any, Any, Any, Any]:
+def load_runtime_dependencies() -> tuple[Any, Any, Any, Any, Any]:
     try:
+        # Unsloth must be imported before transformers/trl/peft to apply its patches.
+        from unsloth import FastLanguageModel, is_bfloat16_supported
         from datasets import load_dataset
         from transformers import TrainingArguments
         from trl import SFTTrainer
-        from unsloth import FastLanguageModel, is_bfloat16_supported
     except ImportError as exc:
         raise SystemExit(
             "Missing training dependencies. Run this inside the training container "
             "or install unsloth, datasets, transformers, and trl."
         ) from exc
 
-    return load_dataset, TrainingArguments, SFTTrainer, FastLanguageModel, is_bfloat16_supported, None
+    return load_dataset, TrainingArguments, SFTTrainer, FastLanguageModel, is_bfloat16_supported
 
 
 def render_chat(example: dict[str, Any], tokenizer: Any) -> dict[str, str]:
@@ -156,7 +157,7 @@ def main() -> None:
     args = parse_args()
     save_run_config(args)
 
-    load_dataset, TrainingArguments, SFTTrainer, FastLanguageModel, is_bfloat16_supported, _ = load_runtime_dependencies()
+    load_dataset, TrainingArguments, SFTTrainer, FastLanguageModel, is_bfloat16_supported = load_runtime_dependencies()
 
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=args.model_name,

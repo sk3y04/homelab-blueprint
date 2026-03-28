@@ -265,8 +265,9 @@ services:
     image: ${AI_TRAINING_IMAGE:-unsloth/unsloth:latest}
     container_name: ai-training
     profiles: ["training"]
+    user: "0:0"
     working_dir: /workspace
-    command: ["bash"]
+    command: ["/bin/bash", "/repo/services/ai-stack/scripts/start_training_container.sh"]
     stdin_open: true
     tty: true
     shm_size: "16gb"
@@ -277,6 +278,8 @@ services:
       - HF_HOME=/workspace/.cache/huggingface
       - HUGGINGFACE_HUB_CACHE=/workspace/.cache/huggingface
       - TRANSFORMERS_CACHE=/workspace/.cache/huggingface
+      - AI_TRAINING_AUTO_FIX_TRANSFORMERS=${AI_TRAINING_AUTO_FIX_TRANSFORMERS:-true}
+      - AI_TRAINING_TRANSFORMERS_VERSION=${AI_TRAINING_TRANSFORMERS_VERSION:-5.2.0}
 
     volumes:
       - ${AI_ACTIVE_DATA_DIR}/training:/workspace

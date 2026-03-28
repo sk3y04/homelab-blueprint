@@ -188,11 +188,29 @@ cd services/ai-stack
 docker compose --profile training run --rm training
 ```
 
+The training service now starts as `root` and auto-normalizes `transformers`
+for the Qwen3.5 workflow before dropping you into a shell.
+
+Default behavior:
+
+- runs as `root` so `/repo` is readable in the container
+- normalizes `transformers` to `5.2.0` for `Qwen/Qwen3.5-9B`
+
+If you need to do the dependency adjustment manually, the equivalent commands are:
+
+```bash
+pip uninstall -y transformers
+pip install --no-cache-dir "transformers==5.2.0"
+```
+
+This may leave the container's bundled `vllm` package version-mismatched, which
+is acceptable for a training-only session.
+
 Inside that container, a baseline 9B run looks like this:
 
 ```bash
 python /repo/services/ai-stack/scripts/train_persona_unsloth.py \
-  --model-name Qwen/Qwen3.5-9B-Instruct \
+  --model-name Qwen/Qwen3.5-9B \
   --train-file /workspace/processed/persona-v1/train.jsonl \
   --valid-file /workspace/processed/persona-v1/valid.jsonl \
   --output-dir /workspace/runs/persona-v1-qwen35-9b \
@@ -289,7 +307,7 @@ cd services/ai-stack
 ./scripts/export_persona_adapter.sh \
   --adapter-dir /opt/ai-stack/data/training/runs/persona-v1-qwen35-9b \
   --output-file /opt/ai-stack/data/training/exports/persona-adapter.gguf \
-  --base-model Qwen/Qwen3.5-9B-Instruct \
+  --base-model Qwen/Qwen3.5-9B \
   --llama-cpp-dir /opt/llama.cpp
 ```
 
@@ -425,7 +443,7 @@ docker compose --profile training run --rm training
 
 # Train adapter inside the container
 python /repo/services/ai-stack/scripts/train_persona_unsloth.py \
-  --model-name Qwen/Qwen3.5-9B-Instruct \
+  --model-name Qwen/Qwen3.5-9B \
   --train-file /workspace/processed/persona-v1/train.jsonl \
   --valid-file /workspace/processed/persona-v1/valid.jsonl \
   --output-dir /workspace/runs/persona-v1-qwen35-9b
@@ -438,7 +456,7 @@ cd services/ai-stack
 ./scripts/export_persona_adapter.sh \
   --adapter-dir /opt/ai-stack/data/training/runs/persona-v1-qwen35-9b \
   --output-file /opt/ai-stack/data/training/exports/persona-adapter.gguf \
-  --base-model Qwen/Qwen3.5-9B-Instruct \
+  --base-model Qwen/Qwen3.5-9B \
   --llama-cpp-dir /opt/llama.cpp
 
 # Deploy and promote
