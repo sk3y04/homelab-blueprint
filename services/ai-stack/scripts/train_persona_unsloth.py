@@ -246,7 +246,6 @@ def main() -> None:
         model=model,
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
-        tokenizer=tokenizer,
         data_collator=data_collator,
         args=training_args,
     )
