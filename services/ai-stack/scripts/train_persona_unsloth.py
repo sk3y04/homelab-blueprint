@@ -151,7 +151,7 @@ def tokenize_chat(example: dict[str, str], tokenizer: Any, max_seq_length: int) 
         raise ValueError("Each rendered record must contain a non-empty 'text' field.")
 
     tokens = tokenizer(
-        text,
+        text=text,
         truncation=True,
         max_length=max_seq_length,
         padding=False,
