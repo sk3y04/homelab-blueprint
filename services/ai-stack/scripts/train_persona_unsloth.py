@@ -117,20 +117,19 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def load_runtime_dependencies() -> tuple[Any, Any, Any, Any, Any]:
+def load_runtime_dependencies() -> tuple[Any, Any, Any, Any, Any, Any]:
     try:
         # Unsloth must be imported before transformers/trl/peft to apply its patches.
         from unsloth import FastLanguageModel, is_bfloat16_supported
         from datasets import load_dataset
-        from transformers import TrainingArguments
-        from trl import SFTTrainer
+        from transformers import DataCollatorForLanguageModeling, Trainer, TrainingArguments
     except ImportError as exc:
         raise SystemExit(
             "Missing training dependencies. Run this inside the training container "
-            "or install unsloth, datasets, transformers, and trl."
+            "or install unsloth, datasets, and transformers."
         ) from exc
 
-    return load_dataset, TrainingArguments, SFTTrainer, FastLanguageModel, is_bfloat16_supported
+    return load_dataset, TrainingArguments, Trainer, DataCollatorForLanguageModeling, FastLanguageModel, is_bfloat16_supported
 
 
 def render_chat(example: dict[str, Any], tokenizer: Any) -> dict[str, str]:
@@ -146,6 +145,23 @@ def render_chat(example: dict[str, Any], tokenizer: Any) -> dict[str, str]:
     return {"text": text}
 
 
+def tokenize_chat(example: dict[str, str], tokenizer: Any, max_seq_length: int) -> dict[str, Any]:
+    text = example.get("text")
+    if not isinstance(text, str) or not text:
+        raise ValueError("Each rendered record must contain a non-empty 'text' field.")
+
+    tokens = tokenizer(
+        text,
+        truncation=True,
+        max_length=max_seq_length,
+        padding=False,
+    )
+    return {
+        "input_ids": tokens["input_ids"],
+        "attention_mask": tokens["attention_mask"],
+    }
+
+
 def save_run_config(args: argparse.Namespace) -> None:
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -157,7 +173,7 @@ def main() -> None:
     args = parse_args()
     save_run_config(args)
 
-    load_dataset, TrainingArguments, SFTTrainer, FastLanguageModel, is_bfloat16_supported = load_runtime_dependencies()
+    load_dataset, TrainingArguments, Trainer, DataCollatorForLanguageModeling, FastLanguageModel, is_bfloat16_supported = load_runtime_dependencies()
 
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=args.model_name,
@@ -186,12 +202,20 @@ def main() -> None:
         lambda row: render_chat(row, tokenizer),
         remove_columns=dataset["train"].column_names,
     )
+    train_dataset = train_dataset.map(
+        lambda row: tokenize_chat(row, tokenizer, args.max_seq_length),
+        remove_columns=train_dataset.column_names,
+    )
 
     eval_dataset = None
     if "validation" in dataset and len(dataset["validation"]) > 0:
         eval_dataset = dataset["validation"].map(
             lambda row: render_chat(row, tokenizer),
             remove_columns=dataset["validation"].column_names,
+        )
+        eval_dataset = eval_dataset.map(
+            lambda row: tokenize_chat(row, tokenizer, args.max_seq_length),
+            remove_columns=eval_dataset.column_names,
         )
 
     bf16_supported = is_bfloat16_supported()
@@ -214,17 +238,16 @@ def main() -> None:
         save_total_limit=args.save_total_limit,
         report_to=args.report_to,
         seed=args.random_state,
-        remove_unused_columns=False,
     )
 
-    trainer = SFTTrainer(
+    data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
+
+    trainer = Trainer(
         model=model,
-        tokenizer=tokenizer,
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
-        dataset_text_field="text",
-        max_seq_length=args.max_seq_length,
-        packing=False,
+        tokenizer=tokenizer,
+        data_collator=data_collator,
         args=training_args,
     )
 
