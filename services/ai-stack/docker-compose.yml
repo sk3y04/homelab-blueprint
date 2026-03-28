@@ -243,7 +243,11 @@ services:
               capabilities: [gpu, utility]
 
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:9400/metrics || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "/usr/bin/bash -lc 'exec 3<>/dev/tcp/127.0.0.1/9400 && printf \"GET /metrics HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n\" >&3 && grep -q \"^# HELP\\|^DCGM_\" <&3' || exit 1",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
