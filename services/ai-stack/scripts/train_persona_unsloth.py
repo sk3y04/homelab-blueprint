@@ -214,6 +214,7 @@ def main() -> None:
         save_total_limit=args.save_total_limit,
         report_to=args.report_to,
         seed=args.random_state,
+        remove_unused_columns=False,
     )
 
     trainer = SFTTrainer(
