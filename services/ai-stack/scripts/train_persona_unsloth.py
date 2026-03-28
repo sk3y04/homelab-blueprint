@@ -150,7 +150,9 @@ def tokenize_chat(example: dict[str, str], tokenizer: Any, max_seq_length: int) 
     if not isinstance(text, str) or not text:
         raise ValueError("Each rendered record must contain a non-empty 'text' field.")
 
-    tokens = tokenizer(
+    text_tokenizer = getattr(tokenizer, "tokenizer", tokenizer)
+
+    tokens = text_tokenizer(
         text=text,
         truncation=True,
         max_length=max_seq_length,
@@ -181,6 +183,7 @@ def main() -> None:
         dtype=None,
         load_in_4bit=args.load_in_4bit,
     )
+    text_tokenizer = getattr(tokenizer, "tokenizer", tokenizer)
 
     model = FastLanguageModel.get_peft_model(
         model,
@@ -240,7 +243,7 @@ def main() -> None:
         seed=args.random_state,
     )
 
-    data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
+    data_collator = DataCollatorForLanguageModeling(tokenizer=text_tokenizer, mlm=False)
 
     trainer = Trainer(
         model=model,
