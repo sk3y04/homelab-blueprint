@@ -19,7 +19,7 @@ llm:
   # need up to 120s for long contexts.
   timeout: 120
   # Max tokens per response.
-  max_tokens: 4096
+  max_tokens: 1024
   temperature: 0.7
 
 # ── Agent Defaults ────────────────────────────────────────────────────────
@@ -28,6 +28,8 @@ agent:
   system_prompt: |
     You are a helpful AI assistant running locally on a home server.
     Be concise, accurate, and honest. If you are unsure, say so.
+    Give direct answers first. Do not reveal internal reasoning or
+    chain-of-thought. Keep replies short unless the user asks for detail.
   # Max conversation history turns to keep in context.
   max_history: 20
 

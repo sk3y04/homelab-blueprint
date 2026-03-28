@@ -13,6 +13,7 @@ This README covers:
 
 For the broader design and training rationale, see:
 
+- `guide/AI_PERSONA_RUNBOOK.md`
 - `guide/AI_PERSONA_TRAINING.md`
 - `guide/AI_PERSONA_EVAL.md`
 - `guide/AI_STACK.md`
@@ -354,6 +355,12 @@ Quick validation after deployment:
 docker exec ai-ollama ollama list
 docker exec ai-ollama ollama run persona "hey, what's up?"
 ```
+
+Current default behavior for the persona path in this repo:
+
+- the persona system prompt is biased toward direct answers and no visible chain-of-thought
+- OpenClaw caps responses at `1024` tokens to reduce long generations
+- OpenCode caps the persona model output at `1024` tokens for the same reason
 
 ---
 

@@ -49,6 +49,9 @@ Prometheus ◄──────┤ DCGM Exporter  │◄── RTX 3090
 
 For a full persona fine-tuning plan tailored to this exact RTX 3090-based stack,
 see `guide/AI_PERSONA_TRAINING.md`.
+For a single end-to-end operator checklist covering dataset build, training,
+evaluation, export, deployment, and promotion, see
+`guide/AI_PERSONA_RUNBOOK.md`.
 For the operator reference covering the concrete training, export, deployment,
 and promotion commands, see `services/ai-stack/scripts/README.md`.
 

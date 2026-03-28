@@ -34,6 +34,7 @@ Production-ready Docker Compose stacks and host service configs for a self-hoste
 - [Guides](#guides)
   - [Network Architecture](NETWORK.md)
    - [AI Stack](guide/AI_STACK.md)
+      - [AI Persona LoRA Runbook](guide/AI_PERSONA_RUNBOOK.md)
    - [ComfyUI](guide/COMFYUI.md)
    - [AI Persona LoRA Training](guide/AI_PERSONA_TRAINING.md)
    - [AI Persona Evaluation Checklist](guide/AI_PERSONA_EVAL.md)

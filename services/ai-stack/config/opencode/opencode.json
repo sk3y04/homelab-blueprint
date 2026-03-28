@@ -33,7 +33,7 @@
           "name": "Persona LoRA (local)",
           "limit": {
             "context": 8192,
-            "output": 4096
+            "output": 1024
           }
         },
         "qwen3:32b": {
