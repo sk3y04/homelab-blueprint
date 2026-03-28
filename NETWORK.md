@@ -60,6 +60,9 @@ This document describes a network workflow for exposing self-hosted services run
                          │   ├──────────┤  ├──────────────┤  │
                          │   │ BentoPDF │  │  Trilium      │  │
                          │   │  :8084   │  │   :8085       │  │
+                         │   ├──────────┤  ├──────────────┤  │
+                         │   │Pinchflat │  │              │  │
+                         │   │  :8945   │  │              │  │
                          │   └──────────┘  └──────────────┘  │
                          │     Home Network (Hidden IP)       │
                          └────────────────────────────────────┘
@@ -98,7 +101,7 @@ Nginx runs natively on the FreeBSD VPS (not in Docker). It handles:
 - **TLS termination** with Let's Encrypt certificates
 - **HTTP → HTTPS redirection** for all services
 - **ACME challenge** serving for automated certificate renewal
-- **WebSocket upgrades** for services that need them (Jellyfin, Code Server, Guacamole)
+- **WebSocket upgrades** for services that need them (Jellyfin, Code Server, Guacamole, Pinchflat)
 - **TCP stream proxying** for non-HTTP protocols (Minecraft)
 
 ### 4. Home Server — Docker Host
@@ -114,6 +117,7 @@ All services are exposed as subdomains under `example.com`, each with its own Le
 | Subdomain | Service | Upstream (via tunnel) | Protocol |
 |---|---|---|---|
 | `jellyfin.example.com` | Jellyfin | `10.8.0.2:8096` | HTTPS (HTTP/2) |
+| `pinchflat.example.com` | Pinchflat | `10.8.0.2:8945` | HTTPS (HTTP/2) |
 | `cloud.example.com` | Nextcloud | `10.8.0.2:80` | HTTPS (HTTP/2) |
 | `code.example.com` | Code Server | `10.8.0.2:8443` | HTTPS (HTTP/2) |
 | `torrent.example.com` | qBittorrent | `10.8.0.2:8081` | HTTPS (HTTP/2) |
@@ -171,6 +175,11 @@ Certificate files are stored at `/usr/local/etc/letsencrypt/live/<domain>/` on t
 ### Code Server
 - WebSocket support is critical for the interactive terminal and editor.
 - Extended timeouts (3600s) for long-lived sessions.
+
+### Pinchflat
+- WebSocket support is required for real-time UI updates.
+- Prefer Pinchflat's built-in HTTP Basic Auth when the app is internet-facing.
+- If you expose podcast / RSS feed endpoints, do not place blanket reverse-proxy auth in front of those routes unless you explicitly exempt them.
 
 ### qBittorrent
 - Standard reverse proxy with 600s timeouts.

@@ -51,6 +51,7 @@ Install the NVIDIA Container Toolkit on the host first so Jellyfin can access th
 2. **First Run Setup:**
    - Create admin username/password.
    - Add media libraries (Movies, TV Shows, Music).
+    - If using Pinchflat, add a separate library for YouTube content and point it at the generated `shows/` directory under your Pinchflat download root.
     - Enable `NVIDIA NVENC` / `NVIDIA NVDEC` in **Dashboard -> Playback -> Transcoding** settings.
    - Configure language and country.
 

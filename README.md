@@ -1,11 +1,11 @@
 # Homelab Blueprint
 
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/compose/)
-[![Services](https://img.shields.io/badge/Services-15-green.svg)](#services)
+[![Services](https://img.shields.io/badge/Services-16-green.svg)](#services)
 [![Host Services](https://img.shields.io/badge/Host_Services-2-orange.svg)](#-monero-full-node--xmrig-mining)
 [![Rocky Linux](https://img.shields.io/badge/Rocky_Linux-10-10B981?logo=rockylinux&logoColor=white)](https://rockylinux.org/)
 
-Production-ready Docker Compose stacks and host service configs for a self-hosted home server — 15 Docker services + Monero full node & XMRig miner, VPS reverse-proxy architecture, Authelia 2FA, local AI workloads, and full observability. Fork it, configure your `.env` files, and deploy.
+Production-ready Docker Compose stacks and host service configs for a self-hosted home server — 16 Docker services + Monero full node & XMRig miner, VPS reverse-proxy architecture, Authelia 2FA, local AI workloads, and full observability. Fork it, configure your `.env` files, and deploy.
 
 ---
 
@@ -15,6 +15,7 @@ Production-ready Docker Compose stacks and host service configs for a self-hoste
 - [Server Hardware](#server-hardware)
 - [Services](#services)
   - [Jellyfin](#-jellyfin--media-server)
+   - [Pinchflat](#-pinchflat--youtube-media-manager)
   - [Nextcloud](#-nextcloud--personal-cloud)
   - [Code Server](#-code-server--remote-development)
    - [AI Stack](#-ai-stack--local-llm--agent-platform)
@@ -100,6 +101,24 @@ This repository contains production-ready Docker Compose stacks that I use daily
 - Hardware transcoding support via NVIDIA Container Toolkit (NVENC/NVDEC).
 - Media library mounted read-only from host storage.
 - Runs on a dedicated `media_internal` bridge network.
+
+---
+
+### 📺 Pinchflat — YouTube Media Manager
+
+> 📖 **Guide:** [Full Setup Guide](guide/PINCHFLAT.md)
+
+| | |
+|---|---|
+| **Directory** | `services/pinchflat/` |
+| **Image** | `ghcr.io/kieraneglin/pinchflat:latest` |
+| **Purpose** | Automated YouTube channel / playlist downloader for Jellyfin, podcast apps, and archives |
+| **Port** | `8945` (HTTP) |
+
+- Single-container stack built around `yt-dlp`, FFmpeg, and an embedded SQLite database.
+- Downloads directly to a host-mounted media path so Jellyfin or other players can index the files immediately.
+- Supports built-in HTTP Basic Auth, optional public RSS feed endpoints, and reverse-proxy deployment with WebSockets.
+- Optional Prometheus metrics can be scraped by the Monitoring Stack when enabled.
 
 ---
 
@@ -551,6 +570,7 @@ Detailed setup guides for the infrastructure surrounding these Docker stacks:
 │   ├── NEXTCLOUD.md                    # Nextcloud setup guide
 │   ├── NGINX.md                        # Nginx reverse proxy setup guide
 │   ├── P2P_VPN.md                      # P2P / Gluetun VPN setup guide
+│   ├── PINCHFLAT.md                    # Pinchflat setup guide
 │   └── TRILIUM.md                      # TriliumNext Notes setup guide
 ├── vps/
 │   ├── pf.example.conf                 # PF firewall config (template)
@@ -601,6 +621,8 @@ Detailed setup guides for the infrastructure surrounding these Docker stacks:
     │       └── initdb.sql                  # Guacamole DB schema
     ├── jellyfin/
     │   └── docker-compose.yml              # Media streaming server
+   ├── pinchflat/
+   │   └── docker-compose.yml              # YouTube media manager
     ├── matrix-synapse/
     │   ├── docker-compose.yml              # Matrix homeserver + Element Web
     │   └── prepare.sh                      # Synapse config generator
@@ -655,6 +677,28 @@ Each service reads its configuration from a `.env` file in its respective direct
 | `JELLYFIN_CACHE_DIR` | Path to cache directory on host |
 | `MEDIA_ROOT_DIR` | Path to media library root |
 | `TMP_DIR` | Path to temporary directory |
+
+</details>
+
+<details>
+<summary><strong>📺 Pinchflat</strong></summary>
+
+| Variable | Description |
+|---|---|
+| `PUID` | User ID used to own files written by Pinchflat |
+| `PGID` | Group ID used to own files written by Pinchflat |
+| `PINCHFLAT_HTTP_PORT` | Host port for the Pinchflat web UI, feeds, and optional metrics |
+| `PINCHFLAT_CONFIG_DIR` | Host path for Pinchflat config, logs, database, and metadata |
+| `PINCHFLAT_DOWNLOADS_DIR` | Host path where downloaded media is stored |
+| `BASIC_AUTH_USERNAME` | Optional built-in HTTP Basic Auth username |
+| `BASIC_AUTH_PASSWORD` | Optional built-in HTTP Basic Auth password |
+| `EXPOSE_FEED_ENDPOINTS` | Optional flag to expose podcast / RSS feed routes without app auth |
+| `LOG_LEVEL` | Pinchflat log verbosity (`debug` recommended upstream) |
+| `UMASK` | Default file mode mask for downloaded media |
+| `JOURNAL_MODE` | SQLite journal mode (`wal` by default, `delete` for network shares) |
+| `YT_DLP_WORKER_CONCURRENCY` | Concurrent `yt-dlp` workers per queue |
+| `ENABLE_PROMETHEUS` | Enables the `/metrics` endpoint for Prometheus scraping |
+| `BASE_ROUTE_PATH` | Optional subpath prefix when serving behind a stripped reverse-proxy path |
 
 </details>
 

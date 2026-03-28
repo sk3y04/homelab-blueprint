@@ -1,0 +1,69 @@
+# --------------------------------------------------------------------------------
+# Pinchflat — YouTube Media Manager
+# --------------------------------------------------------------------------------
+# This Docker Compose configuration deploys Pinchflat, a self-hosted YouTube
+# media manager built around yt-dlp. It is designed for recurring downloads from
+# channels and playlists rather than one-off grabs.
+#
+# Services:
+#   - pinchflat: The main web application, downloader, and embedded database.
+#
+# Networking:
+#   - Exposes a single HTTP port for the web UI, RSS feeds, and optional
+#     Prometheus metrics.
+#   - Typically reverse-proxied by nginx on the VPS with TLS termination.
+#
+# Notes:
+#   - Run the container as a non-root UID/GID that can write both mounted paths.
+#   - Pinchflat relies on WebSockets for parts of the UI; keep proxy upgrade
+#     headers enabled when publishing it through nginx.
+# --------------------------------------------------------------------------------
+
+services:
+  # Pinchflat web UI and background downloader.
+  pinchflat:
+    image: ghcr.io/kieraneglin/pinchflat:latest
+    container_name: pinchflat
+
+    # Automatically restart the container unless explicitly stopped.
+    restart: unless-stopped
+
+    # Run as the same user/group that owns the mounted config and media paths.
+    user: "${PUID}:${PGID}"
+
+    # Expose the main Pinchflat HTTP port on the host.
+    ports:
+      - "${PINCHFLAT_HTTP_PORT}:8945"
+
+    environment:
+      - TZ=${TZ}
+      - LOG_LEVEL=${LOG_LEVEL:-debug}
+      - UMASK=${UMASK:-022}
+      - BASIC_AUTH_USERNAME=${BASIC_AUTH_USERNAME}
+      - BASIC_AUTH_PASSWORD=${BASIC_AUTH_PASSWORD}
+      - EXPOSE_FEED_ENDPOINTS=${EXPOSE_FEED_ENDPOINTS}
+      - JOURNAL_MODE=${JOURNAL_MODE:-wal}
+      - YT_DLP_WORKER_CONCURRENCY=${YT_DLP_WORKER_CONCURRENCY:-2}
+      - ENABLE_PROMETHEUS=${ENABLE_PROMETHEUS}
+      - BASE_ROUTE_PATH=${BASE_ROUTE_PATH:-/}
+
+    volumes:
+      - ${PINCHFLAT_CONFIG_DIR}:/config
+      - ${PINCHFLAT_DOWNLOADS_DIR}:/downloads
+
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8945/healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+    # Conservative resource limits for a single-user media downloader UI.
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.25'
+          memory: 256M

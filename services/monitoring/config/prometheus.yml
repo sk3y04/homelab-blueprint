@@ -59,3 +59,12 @@ scrape_configs:
       - targets: ["ai-dcgm-exporter:9400"]
     metrics_path: /metrics
     scrape_interval: 5s
+
+  # ── Pinchflat (optional Phoenix / Ecto / Oban runtime metrics) ─────────
+  # Pinchflat exposes /metrics on its main HTTP port when ENABLE_PROMETHEUS
+  # is set in services/pinchflat/.env. Prometheus reaches the host-bound port
+  # through the Docker bridge gateway.
+  - job_name: "pinchflat"
+    static_configs:
+      - targets: ["172.17.0.1:8945"]
+    metrics_path: /metrics
