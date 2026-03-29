@@ -371,17 +371,23 @@ cd services/ai-stack
   --llama-cpp-dir /opt/llama.cpp
 ```
 
+`--base-model` may be either a local model directory or a Hugging Face repo ID.
+If you pass a repo ID such as `Qwen/Qwen3.5-9B`, the script downloads only the
+base model metadata needed by `convert_lora_to_gguf.py` into the local Hugging Face
+cache and then passes that resolved local snapshot path to llama.cpp.
+
 Important flags:
 
 - `--adapter-dir`: directory containing the trained PEFT adapter
 - `--output-file`: output GGUF adapter path
-- `--base-model`: base model identifier passed to the converter
+- `--base-model`: local base model directory or Hugging Face repo ID
 - `--llama-cpp-dir`: path containing `convert_lora_to_gguf.py`
 
 Common failure causes:
 
 - wrong `--base-model`
 - missing `convert_lora_to_gguf.py`
+- no network or Hugging Face access when using a repo ID
 - adapter directory does not contain the expected LoRA files
 
 ---

@@ -711,6 +711,10 @@ cd services/ai-stack
    --llama-cpp-dir /opt/llama.cpp
 ```
 
+For export, `--base-model` may point to either the Hugging Face repo ID or an
+already-downloaded local base model directory. The helper resolves repo IDs to a
+local metadata snapshot automatically.
+
 The bootstrap step above only needs Python and git for export. It does not need
 `nvcc` unless you explicitly request a native CUDA build with `--build-tools --cuda`.
 

@@ -289,6 +289,10 @@ cd services/ai-stack
   --llama-cpp-dir /opt/llama.cpp
 ```
 
+`--base-model` can be either the Hugging Face repo ID or a local base model
+directory. The export helper resolves repo IDs into a cached local snapshot
+before invoking `llama.cpp`.
+
 Expected output:
 
 ```text
