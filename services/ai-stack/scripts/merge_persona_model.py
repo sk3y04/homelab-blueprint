@@ -40,15 +40,14 @@ def parse_args() -> argparse.Namespace:
 def load_runtime_dependencies() -> tuple[Any, Any, Any, Any, Any, Any, Any]:
     try:
         import torch
-        from unsloth import FastLanguageModel
         from peft import PeftModel
-        from transformers import AutoProcessor, AutoTokenizer
+        from transformers import AutoModelForCausalLM, AutoProcessor, AutoTokenizer
     except ImportError as exc:
         raise SystemExit(
-            "Missing merge dependencies. Run this inside the training container or install unsloth, peft, torch, and transformers."
+            "Missing merge dependencies. Run this inside the training container or install peft, torch, and transformers."
         ) from exc
 
-    return torch, FastLanguageModel, PeftModel, AutoTokenizer, AutoProcessor, exc_to_str, read_run_config
+    return torch, PeftModel, AutoModelForCausalLM, AutoTokenizer, AutoProcessor, exc_to_str, read_run_config
 
 
 def exc_to_str(exc: Exception) -> str:
@@ -96,6 +95,49 @@ def maybe_save_tokenizer_and_processor(base_model: str, output_dir: Path, auto_t
     processor.save_pretrained(output_dir)
 
 
+def load_base_model(
+    base_model: str,
+    max_seq_length: int,
+    device_map: str,
+    dtype: Any,
+    auto_model_cls: Any,
+) -> Any:
+    try:
+        from unsloth import FastLanguageModel
+
+        print("Loading base model through Unsloth...")
+        base, _tokenizer = FastLanguageModel.from_pretrained(
+            base_model,
+            max_seq_length=max_seq_length,
+            torch_dtype=dtype,
+            load_in_4bit=False,
+            device_map=device_map,
+        )
+        return base
+    except Exception as exc:
+        print(f"Unsloth loader unavailable, falling back to Transformers: {exc_to_str(exc)}")
+
+    try:
+        print("Loading base model through Transformers...")
+        return auto_model_cls.from_pretrained(
+            base_model,
+            device_map=device_map,
+            torch_dtype=dtype,
+            trust_remote_code=True,
+        )
+    except ValueError as exc:
+        error_text = str(exc)
+        if "model type `qwen3_5`" in error_text or "model type 'qwen3_5'" in error_text:
+            raise SystemExit(
+                "The installed transformers build does not support qwen3_5.\n"
+                "Inside the training container, run:\n"
+                "  python -m pip uninstall -y transformers\n"
+                "  python -m pip install --no-cache-dir git+https://github.com/huggingface/transformers.git\n"
+                "Then rerun merge_persona_model.py."
+            ) from exc
+        raise
+
+
 def main() -> None:
     args = parse_args()
     adapter_dir = Path(args.adapter_dir).resolve()
@@ -104,7 +146,7 @@ def main() -> None:
     if not adapter_dir.is_dir():
         raise SystemExit(f"Adapter directory not found: {adapter_dir}")
 
-    torch, fast_language_model, peft_model_cls, auto_tokenizer, auto_processor, exc_formatter, run_config_reader = load_runtime_dependencies()
+    torch, peft_model_cls, auto_model_cls, auto_tokenizer, auto_processor, exc_formatter, run_config_reader = load_runtime_dependencies()
 
     base_model = args.base_model or read_base_model_from_adapter(adapter_dir)
     run_config = run_config_reader(adapter_dir)
@@ -117,12 +159,12 @@ def main() -> None:
     print(f"Torch dtype: {dtype}")
     print(f"Max seq length: {max_seq_length}")
 
-    base, _tokenizer = fast_language_model.from_pretrained(
-        base_model,
+    base = load_base_model(
+        base_model=base_model,
         max_seq_length=max_seq_length,
-        torch_dtype=dtype,
-        load_in_4bit=False,
         device_map=args.device_map,
+        dtype=dtype,
+        auto_model_cls=auto_model_cls,
     )
 
     model = peft_model_cls.from_pretrained(
