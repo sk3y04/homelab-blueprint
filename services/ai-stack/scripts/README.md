@@ -259,7 +259,7 @@ Script:
 
 Purpose:
 
-- clone and build `llama.cpp` for GGUF conversion tooling
+- prepare `llama.cpp` for GGUF conversion tooling
 
 Basic usage:
 
@@ -267,6 +267,10 @@ Basic usage:
 cd services/ai-stack
 ./scripts/bootstrap_llama_cpp.sh --install-dir /opt/llama.cpp
 ```
+
+That default path clones or updates `llama.cpp` and installs the Python
+dependencies needed by `convert_lora_to_gguf.py`. It does not require a CUDA
+compiler and does not build native binaries.
 
 If the host cannot reach GitHub directly, point the script at an internal mirror or
 an already-seeded local git checkout:
@@ -288,9 +292,27 @@ LLAMA_CPP_REPO_URL=ssh://git@git.example.lan/infra/llama.cpp.git \
 If the script fails with `Could not resolve host`, that host has a DNS or outbound
 network problem. Fix host networking or use `--repo-url` with a reachable source.
 
+If you also want native `llama.cpp` binaries, build them explicitly:
+
+```bash
+cd services/ai-stack
+./scripts/bootstrap_llama_cpp.sh --install-dir /opt/llama.cpp --build-tools --cpu-only
+```
+
+For a CUDA-enabled native build:
+
+```bash
+cd services/ai-stack
+./scripts/bootstrap_llama_cpp.sh --install-dir /opt/llama.cpp --build-tools --cuda
+```
+
+That mode requires a working `nvcc` in `PATH` or `CUDACXX` set to the CUDA compiler.
+
+What the script does:
+
 - clone or update `llama.cpp`
 - install conversion dependencies
-- build the conversion tools with CUDA enabled
+- optionally build native `llama.cpp` tools
 
 Usage:
 
@@ -303,19 +325,28 @@ Optional flags:
 
 - `--install-dir`: where `llama.cpp` should live
 - `--repo-ref`: branch or tag to check out
+- `--repo-url`: alternate git remote or local mirror path
+- `--build-tools`: also compile native `llama.cpp` binaries
+- `--cpu-only`: build native tools without CUDA
+- `--cuda`: build native tools with CUDA support
 
 Requirements on the machine where you run it:
 
 - `git`
-- `cmake`
 - `python`
+
+Additional requirements only when `--build-tools` is used:
+
+- `cmake`
 - a working compiler toolchain
+- `nvcc` or `CUDACXX` if you use `--cuda`
 
 What it produces:
 
 - a `llama.cpp` checkout
-- built tools under the `build` directory
 - a working `convert_lora_to_gguf.py`
+
+If `--build-tools` is used, it also produces native binaries under the `build` directory.
 
 ---
 

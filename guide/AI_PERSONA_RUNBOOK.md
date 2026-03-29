@@ -256,6 +256,9 @@ cd services/ai-stack
 ./scripts/bootstrap_llama_cpp.sh --install-dir /opt/llama.cpp
 ```
 
+That default command is enough for adapter export because it installs the Python
+conversion tooling without requiring a CUDA compiler.
+
 If the training host cannot resolve or reach GitHub, rerun against an internal
 mirror or local git source:
 
@@ -265,6 +268,9 @@ cd services/ai-stack
   --install-dir /opt/llama.cpp \
   --repo-url /srv/git/llama.cpp
 ```
+
+Only if you also want native `llama.cpp` binaries, add `--build-tools`. Use
+`--cpu-only` for a generic build or `--cuda` if `nvcc` is available.
 
 This provides the conversion tooling used by the export helper.
 

@@ -7,6 +7,7 @@
 #   ./scripts/bootstrap_llama_cpp.sh --install-dir /opt/llama.cpp
 #   ./scripts/bootstrap_llama_cpp.sh --repo-ref master
 #   ./scripts/bootstrap_llama_cpp.sh --repo-url /srv/git/llama.cpp
+#   ./scripts/bootstrap_llama_cpp.sh --build-tools --cuda
 # --------------------------------------------------------------------------
 set -euo pipefail
 
@@ -19,16 +20,24 @@ Usage:
   ./scripts/bootstrap_llama_cpp.sh --install-dir /opt/llama.cpp
   ./scripts/bootstrap_llama_cpp.sh --repo-ref master
   ./scripts/bootstrap_llama_cpp.sh --repo-url /srv/git/llama.cpp
+  ./scripts/bootstrap_llama_cpp.sh --build-tools --cpu-only
+  ./scripts/bootstrap_llama_cpp.sh --build-tools --cuda
 
 Environment overrides:
   LLAMA_CPP_DIR       Install path for the local checkout
   LLAMA_CPP_REPO_URL  Alternate git source for llama.cpp
+
+Notes:
+  By default this script prepares the Python conversion tooling only.
+  Use --build-tools if you also need native llama.cpp binaries.
 EOF
 }
 
 INSTALL_DIR="${LLAMA_CPP_DIR:-/opt/llama.cpp}"
 REPO_URL="${LLAMA_CPP_REPO_URL:-https://github.com/ggml-org/llama.cpp.git}"
 REPO_REF="master"
+BUILD_TOOLS=0
+BUILD_BACKEND="cpu"
 
 print_clone_help() {
   local error_output="$1"
@@ -81,6 +90,18 @@ while [ $# -gt 0 ]; do
       REPO_URL="$2"
       shift 2
       ;;
+    --build-tools)
+      BUILD_TOOLS=1
+      shift
+      ;;
+    --cpu-only)
+      BUILD_BACKEND="cpu"
+      shift
+      ;;
+    --cuda)
+      BUILD_BACKEND="cuda"
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -97,13 +118,13 @@ if ! command -v git >/dev/null 2>&1; then
   exit 1
 fi
 
-if ! command -v cmake >/dev/null 2>&1; then
-  echo "ERROR: cmake is required."
+if ! command -v python >/dev/null 2>&1; then
+  echo "ERROR: python is required."
   exit 1
 fi
 
-if ! command -v python >/dev/null 2>&1; then
-  echo "ERROR: python is required."
+if [ "$BUILD_TOOLS" -eq 1 ] && ! command -v cmake >/dev/null 2>&1; then
+  echo "ERROR: cmake is required when --build-tools is used."
   exit 1
 fi
 
@@ -121,8 +142,35 @@ fi
 echo "Installing Python requirements for conversion helpers"
 python -m pip install -r "$INSTALL_DIR/requirements/requirements-convert_hf_to_gguf.txt"
 
-echo "Configuring llama.cpp"
-cmake -S "$INSTALL_DIR" -B "$INSTALL_DIR/build" -DGGML_CUDA=ON
+if [ "$BUILD_TOOLS" -eq 0 ]; then
+  echo ""
+  echo "Skipping native llama.cpp build."
+  echo "The GGUF conversion helper is ready for export_persona_adapter.sh."
+  echo "Use --build-tools if you also need native llama.cpp binaries."
+  echo "llama.cpp is ready at: $INSTALL_DIR"
+  echo "Converter path: $INSTALL_DIR/convert_lora_to_gguf.py"
+  exit 0
+fi
+
+if [ "$BUILD_BACKEND" = "cuda" ]; then
+  CUDA_COMPILER="${CUDACXX:-}"
+
+  if [ -z "$CUDA_COMPILER" ] && command -v nvcc >/dev/null 2>&1; then
+    CUDA_COMPILER="$(command -v nvcc)"
+  fi
+
+  if [ -z "$CUDA_COMPILER" ]; then
+    echo "ERROR: --build-tools --cuda requires a working CUDA compiler."
+    echo "Set CUDACXX to nvcc, add nvcc to PATH, or use --build-tools --cpu-only."
+    exit 1
+  fi
+
+  echo "Configuring llama.cpp with CUDA support"
+  cmake -S "$INSTALL_DIR" -B "$INSTALL_DIR/build" -DGGML_CUDA=ON -DCMAKE_CUDA_COMPILER="$CUDA_COMPILER"
+else
+  echo "Configuring llama.cpp with CPU-only support"
+  cmake -S "$INSTALL_DIR" -B "$INSTALL_DIR/build" -DGGML_CUDA=OFF
+fi
 
 echo "Building llama.cpp tools"
 cmake --build "$INSTALL_DIR/build" -j
