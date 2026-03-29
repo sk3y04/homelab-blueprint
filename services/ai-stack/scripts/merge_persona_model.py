@@ -28,20 +28,27 @@ def parse_args() -> argparse.Namespace:
         default="5GB",
         help="Shard size for merged safetensors output. Default: 5GB",
     )
+    parser.add_argument(
+        "--max-seq-length",
+        type=int,
+        default=2048,
+        help="Max sequence length passed to the Unsloth loader. Default: 2048",
+    )
     return parser.parse_args()
 
 
-def load_runtime_dependencies() -> tuple[Any, Any, Any, Any, Any, Any]:
+def load_runtime_dependencies() -> tuple[Any, Any, Any, Any, Any, Any, Any]:
     try:
         import torch
+        from unsloth import FastLanguageModel
         from peft import PeftModel
-        from transformers import AutoModelForCausalLM, AutoProcessor, AutoTokenizer
+        from transformers import AutoProcessor, AutoTokenizer
     except ImportError as exc:
         raise SystemExit(
-            "Missing merge dependencies. Run this inside the training container or install peft, torch, and transformers."
+            "Missing merge dependencies. Run this inside the training container or install unsloth, peft, torch, and transformers."
         ) from exc
 
-    return torch, PeftModel, AutoModelForCausalLM, AutoTokenizer, AutoProcessor, exc_to_str
+    return torch, FastLanguageModel, PeftModel, AutoTokenizer, AutoProcessor, exc_to_str, read_run_config
 
 
 def exc_to_str(exc: Exception) -> str:
@@ -58,6 +65,14 @@ def read_base_model_from_adapter(adapter_dir: Path) -> str:
     if not isinstance(base_model, str) or not base_model:
         raise SystemExit(f"base_model_name_or_path missing in {config_path}")
     return base_model
+
+
+def read_run_config(adapter_dir: Path) -> dict[str, Any]:
+    config_path = adapter_dir / "run_config.json"
+    if not config_path.is_file():
+        return {}
+
+    return json.loads(config_path.read_text(encoding="utf-8"))
 
 
 def choose_torch_dtype(torch: Any) -> Any:
@@ -89,21 +104,25 @@ def main() -> None:
     if not adapter_dir.is_dir():
         raise SystemExit(f"Adapter directory not found: {adapter_dir}")
 
-    torch, peft_model_cls, auto_model_cls, auto_tokenizer, auto_processor, exc_formatter = load_runtime_dependencies()
+    torch, fast_language_model, peft_model_cls, auto_tokenizer, auto_processor, exc_formatter, run_config_reader = load_runtime_dependencies()
 
     base_model = args.base_model or read_base_model_from_adapter(adapter_dir)
+    run_config = run_config_reader(adapter_dir)
+    max_seq_length = int(run_config.get("max_seq_length", args.max_seq_length))
     dtype = choose_torch_dtype(torch)
 
     print(f"Loading adapter from: {adapter_dir}")
     print(f"Base model: {base_model}")
     print(f"Device map: {args.device_map}")
     print(f"Torch dtype: {dtype}")
+    print(f"Max seq length: {max_seq_length}")
 
-    base = auto_model_cls.from_pretrained(
+    base, _tokenizer = fast_language_model.from_pretrained(
         base_model,
-        device_map=args.device_map,
+        max_seq_length=max_seq_length,
         torch_dtype=dtype,
-        trust_remote_code=True,
+        load_in_4bit=False,
+        device_map=args.device_map,
     )
 
     model = peft_model_cls.from_pretrained(

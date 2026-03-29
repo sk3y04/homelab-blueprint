@@ -563,8 +563,9 @@ Outputs:
    ```
 
    The training service now starts as `root` and auto-normalizes
-   `transformers` to `5.2.0` for the `Qwen/Qwen3.5-9B` workflow before dropping
-   you into a shell.
+   `transformers` before dropping you into a shell. By default, leave the
+   version unset and use the image-default stack for the `Qwen/Qwen3.5-9B`
+   workflow.
 
 2. Mount:
 
@@ -597,7 +598,7 @@ If you need to do the dependency adjustment manually, the equivalent commands ar
 
 ```bash
 pip uninstall -y transformers
-pip install --no-cache-dir "transformers==5.2.0"
+pip install --no-cache-dir "transformers==<your-pinned-version>"
 ```
 
 This can leave the bundled `vllm` package version-mismatched inside the training

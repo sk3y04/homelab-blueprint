@@ -170,7 +170,7 @@ for the Qwen3.5 workflow before dropping you into a shell.
 Default behavior:
 
 - runs as `root` so the `/repo` bind mount is readable in the container
-- normalizes `transformers` to `5.2.0` for `Qwen/Qwen3.5-9B`
+- uses the image-default `transformers` stack unless you explicitly pin a version in `.env`
 
 These defaults come from `services/ai-stack/docker-compose.yml` and can be
 changed through `.env` if needed.
@@ -179,7 +179,7 @@ If you need to do the dependency adjustment manually, the equivalent commands ar
 
 ```bash
 pip uninstall -y transformers
-pip install --no-cache-dir "transformers==5.2.0"
+pip install --no-cache-dir "transformers==<your-pinned-version>"
 ```
 
 This can leave the container's bundled `vllm` package in a version-conflict
