@@ -41,9 +41,10 @@ if [ -f .env ]; then
   set +a
 fi
 
+DATA_DIR="${AI_ACTIVE_DATA_DIR:-${AI_DATA_DIR:-/opt/ai-stack/data}}"
 MODEL_NAME="persona"
-ADAPTER_FILE="${AI_DATA_DIR:-/opt/ai-stack/data}/training/exports/persona-adapter.gguf"
-LIVE_ADAPTER_DIR="${AI_DATA_DIR:-/opt/ai-stack/data}/lora-adapters"
+ADAPTER_FILE="$DATA_DIR/training/exports/persona-adapter.gguf"
+LIVE_ADAPTER_DIR="$DATA_DIR/lora-adapters"
 LIVE_ADAPTER_FILE="$LIVE_ADAPTER_DIR/persona-adapter.gguf"
 FORCE=0
 

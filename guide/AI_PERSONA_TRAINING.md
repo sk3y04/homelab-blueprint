@@ -426,6 +426,13 @@ window, for example **under 2 to 5 minutes** and with no interleaving message.
 
 This usually improves realism.
 
+Do not treat that as a universal rule. If the target often writes in fragmented
+bursts where each short message is part of the style itself, keep one assistant
+message per label instead of collapsing the burst into one neat block.
+
+For chaotic Polish DM style, message segmentation is a style signal, not just a
+transport detail.
+
 ---
 
 ## Training Hyperparameters
@@ -455,6 +462,7 @@ Start conservative. Small persona datasets overfit quickly.
 - warmup ratio: **0.03 to 0.05**
 - optimizer: **adamw_8bit**
 - scheduler: **cosine** or **linear**
+- loss masking: **assistant reply only** when the dataset format allows it
 
 ### Starting point I would actually use
 
@@ -464,6 +472,11 @@ Start conservative. Small persona datasets overfit quickly.
 - seq length: `2048`
 - lr: `1e-4`
 - epochs: `3`
+
+For the updated trainer in this repository, keep
+`--train-on-assistant-messages-only` enabled. That keeps the optimization
+target focused on how the target person answers instead of spending gradient on
+reconstructing the transcript prefix.
 
 This is a safer first run for a small conversational style dataset.
 
@@ -540,6 +553,29 @@ python services/ai-stack/scripts/build_persona_dataset.py \
    --merge-gap-seconds 180
 ```
 
+By default, assistant-side messages are normalized to remove Polish diacritics
+and punctuation so the model learns a more raw Discord DM writing style.
+
+For a chaotic Polish DM target, prefer:
+
+```bash
+python services/ai-stack/scripts/build_persona_dataset.py \
+   --input /opt/ai-stack/data/training/raw/discord-dm.json \
+   --output-dir /opt/ai-stack/data/training/processed/persona-v1 \
+   --user-id 123456789012345678 \
+   --assistant-id 987654321098765432 \
+   --max-context-turns 6 \
+   --min-context-turns 1 \
+   --user-merge-gap-seconds 180 \
+   --assistant-merge-gap-seconds 0 \
+   --assistant-strip-diacritics \
+   --assistant-strip-punctuation \
+   --assistant-keep-question-marks
+```
+
+This keeps the user-side context compact while preserving one assistant message
+per label.
+
 Outputs:
 
 - `train.jsonl`
@@ -552,6 +588,8 @@ Outputs:
 - verify speaker roles are correct
 - confirm the assistant target is always the target person
 - verify no secrets remain
+- inspect `style_stats` in `stats.json`
+- confirm short-message rate, lowercase rate, `??` rate, and marker counts match the real chat
 
 ### Phase 3: Train the adapter
 
@@ -593,6 +631,18 @@ python /repo/services/ai-stack/scripts/train_persona_unsloth.py \
    --lora-alpha 32 \
    --lora-dropout 0.05
 ```
+
+The trainer now masks loss to the final assistant reply by default. Keep that
+behavior enabled for persona runs unless you have a specific reason to train on
+prompt tokens too.
+
+For chaotic Polish DM style, that matters because it keeps the learning signal
+centered on:
+
+- short reply length
+- fragmented message shape
+- lowercase and no-diacritic habits
+- slang markers and repeated-character patterns
 
 If you need to do the dependency adjustment manually, the equivalent commands are:
 
@@ -644,6 +694,16 @@ Score each output on:
 3. **Context fit**
 4. **Overfitting / memorization risk**
 5. **Stability across unseen topics**
+
+For chaotic Polish DM style, also compare held-out generations against the
+dataset `style_stats` and look specifically at:
+
+- short-message frequency
+- lowercase-only frequency
+- no-diacritic frequency
+- `??` burst frequency
+- repeated-character frequency
+- marker counts for tokens like `xd`, `xddd`, `nw`, `serio`, `kirwa`
 
 ### Success criteria
 

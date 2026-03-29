@@ -11,11 +11,17 @@ This README covers:
 - Ollama deployment
 - promoting the persona model into default service configuration
 
+For current Ollama deployments on this stack, treat the merged quantized GGUF
+path as the primary runnable path. Keep the adapter export path mainly for
+artifact preservation or for runtimes that you have explicitly verified to
+support LoRA adapter inference.
+
 For the broader design and training rationale, see:
 
 - `guide/AI_PERSONA_RUNBOOK.md`
 - `guide/AI_PERSONA_TRAINING.md`
 - `guide/AI_PERSONA_EVAL.md`
+- `guide/AI_PERSONA_RESET.md`
 - `guide/AI_STACK.md`
 
 ---
@@ -49,7 +55,7 @@ This workflow assumes:
 - training data stored outside Git under `/opt/ai-stack/data/training`
 - live adapters stored under `/opt/ai-stack/data/lora-adapters`
 - the AI stack is managed from `services/ai-stack`
-- the target persona model is created in Ollama using `Modelfile.persona.example`
+- the target runnable persona model is usually created in Ollama using `Modelfile.persona.merged.example`
 
 Recommended host preparation before training:
 
@@ -130,6 +136,39 @@ python services/ai-stack/scripts/build_persona_dataset.py \
   --assistant-id 987654321098765432
 ```
 
+Default persona-style normalization:
+
+- assistant-side messages are stripped of Polish diacritics
+- assistant-side punctuation is stripped
+- this biases training toward raw DM-style replies instead of polished assistant prose
+- `stats.json` now also includes assistant-side style metrics so you can compare generated outputs against the dataset shape
+
+For chaotic Polish DM targets, `style_stats` now also tracks:
+
+- lowercase-only rate
+- `??` burst rate
+- repeated-character rate
+- marker counts for tokens like `xd`, `xddd`, `nw`, `serio`, `kirwa`, `czekajta`
+
+For fragmented DM-style targets, use assistant-specific merge and punctuation controls:
+
+```bash
+python services/ai-stack/scripts/build_persona_dataset.py \
+  --input /opt/ai-stack/data/training/raw/discord-dm.json \
+  --output-dir /opt/ai-stack/data/training/processed/persona-v1 \
+  --user-id 123456789012345678 \
+  --assistant-id 987654321098765432 \
+  --max-context-turns 6 \
+  --min-context-turns 1 \
+  --user-merge-gap-seconds 180 \
+  --assistant-merge-gap-seconds 0 \
+  --assistant-strip-diacritics \
+  --assistant-strip-punctuation \
+  --assistant-keep-question-marks
+```
+
+That combination keeps nearby user messages merged into context while preserving one assistant reply per label.
+
 Recommended first run:
 
 ```bash
@@ -155,9 +194,13 @@ Important flags:
 - `--max-context-turns`: upper bound on prior turns included in the prompt
 - `--min-context-turns`: minimum prior context required before a sample is emitted
 - `--merge-gap-seconds`: merge nearby same-author messages into a single turn
+- `--user-merge-gap-seconds`: override merge behavior for user-side context messages only
+- `--assistant-merge-gap-seconds`: override merge behavior for target messages only; set to `0` for one-message-per-label targets
 - `--validation-ratio`: chronological holdout percentage
 - `--system-prompt`: override the default training-time system prompt
 - `--max-samples`: cap sample count for debugging runs
+- `--assistant-keep-question-marks`: preserve `?` and `??` when stripping punctuation
+- `--assistant-keep-exclamation-marks`: preserve `!` when stripping punctuation
 
 Recommended checks after running:
 
@@ -165,6 +208,7 @@ Recommended checks after running:
 2. manually read 50 to 100 samples from `train.jsonl`
 3. verify the assistant message always belongs to the target person
 4. confirm private secrets were not preserved in raw form
+5. compare `style_stats` in `stats.json` against held-out generations from the trained model
 
 ---
 
@@ -177,6 +221,7 @@ Script:
 Purpose:
 
 - run a baseline single-GPU QLoRA fine-tuning job with Unsloth
+- focus loss on the assistant reply by default so persona style transfer is stronger
 
 Runtime requirements:
 
@@ -210,6 +255,17 @@ pip install --no-cache-dir "transformers==<your-pinned-version>"
 This may leave the container's bundled `vllm` package version-mismatched, which
 is acceptable for a training-only session.
 
+### Important note on persona Modelfiles
+
+The persona Modelfiles now include an explicit Qwen-style ChatML `TEMPLATE`.
+This matters for Ollama deployment because a missing or mismatched prompt
+template can make the model behave like a generic assistant, emit raw tokens
+such as `<|im_start|>`, or continue into `Human:` / `Assistant:` style text.
+
+If you change either `Modelfile.persona.example` or
+`Modelfile.persona.merged.example`, you must recreate the Ollama model. A
+running `persona` model does not automatically pick up Modelfile edits.
+
 Inside that container, a baseline 9B run looks like this:
 
 ```bash
@@ -228,6 +284,10 @@ python /repo/services/ai-stack/scripts/train_persona_unsloth.py \
   --lora-dropout 0.05
 ```
 
+Default training behavior now includes assistant-only loss masking. That means
+the trainer optimizes primarily on the final assistant reply rather than on the
+full prompt transcript.
+
 Key flags:
 
 - `--model-name`: Hugging Face model ID to fine-tune
@@ -239,6 +299,7 @@ Key flags:
 - `--gradient-accumulation-steps`: use this to trade throughput for memory safety
 - `--lora-r`, `--lora-alpha`, `--lora-dropout`: primary LoRA tuning controls
 - `--target-modules`: defaults target the standard attention and MLP projections
+- `--train-on-assistant-messages-only`: enabled by default; keeps loss on the target reply only
 
 Output directory contents usually include:
 

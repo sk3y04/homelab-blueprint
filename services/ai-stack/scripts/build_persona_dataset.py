@@ -32,6 +32,7 @@ import json
 import math
 import random
 import re
+import unicodedata
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -39,8 +40,15 @@ from typing import Any, Iterable
 
 
 DEFAULT_SYSTEM_PROMPT = (
-    "Match the assistant's conversational style from the examples while staying "
-    "coherent, natural, and context-aware."
+    "Reply like the target person in the examples. Keep the tone natural, "
+    "specific, casual, and DM-like. Prefer short direct replies over formal "
+    "assistant answers. Do not sound like a generic AI assistant, do not add "
+    "capability disclaimers, and stay in the same language and vibe as the "
+    "conversation unless the context clearly requires otherwise. Match the "
+    "writing habits from the dataset, including lack of punctuation and lack "
+    "of Polish diacritics when that is how the target person writes. If the "
+    "examples show fragmented burst messaging, keep that fragmented message "
+    "shape instead of rewriting it into polished prose."
 )
 
 
@@ -49,6 +57,25 @@ MENTION_RE = re.compile(r"<@!?\d+>")
 CHANNEL_RE = re.compile(r"<#\d+>")
 CUSTOM_EMOJI_RE = re.compile(r"<a?:([a-zA-Z0-9_~]+):\d+>")
 WHITESPACE_RE = re.compile(r"\s+")
+PUNCT_RE = re.compile(r"[!\"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~…„”’‘—–]+")
+POLISH_DIACRITICS_RE = re.compile(r"[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]")
+TERMINAL_PUNCTUATION_RE = re.compile(r"[.!?,:;…]+$")
+QUESTION_BURST_RE = re.compile(r"\?{2,}")
+REPEATED_CHARACTER_RE = re.compile(r"(.)\1{2,}", re.IGNORECASE)
+UPPERCASE_LETTER_RE = re.compile(r"[A-ZĄĆĘŁŃÓŚŹŻ]")
+STYLE_TOKEN_RE = re.compile(r"[0-9A-Za-ząćęłńóśźżĄĆĘŁŃÓŚŹŻ?!.]+")
+CHAOTIC_DM_MARKERS = (
+    "xd",
+    "xddd",
+    "nw",
+    "nwm",
+    "wgl",
+    "serio",
+    "boze",
+    "kirwa",
+    "kurde",
+    "czekajta",
+)
 
 
 @dataclass
@@ -98,6 +125,18 @@ def parse_args() -> argparse.Namespace:
         help="Merge consecutive same-author messages within this time gap. Default: 180",
     )
     parser.add_argument(
+        "--user-merge-gap-seconds",
+        type=int,
+        default=None,
+        help="Optional merge gap override for user-side messages. Defaults to --merge-gap-seconds.",
+    )
+    parser.add_argument(
+        "--assistant-merge-gap-seconds",
+        type=int,
+        default=None,
+        help="Optional merge gap override for assistant-side messages. Set to 0 to keep one target message per label.",
+    )
+    parser.add_argument(
         "--seed",
         type=int,
         default=42,
@@ -108,6 +147,30 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=0,
         help="Optional cap on emitted samples after chronological construction. Default: unlimited",
+    )
+    parser.add_argument(
+        "--assistant-strip-diacritics",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Strip Polish diacritics from assistant-side messages. Default: true",
+    )
+    parser.add_argument(
+        "--assistant-strip-punctuation",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Strip punctuation from assistant-side messages. Default: true",
+    )
+    parser.add_argument(
+        "--assistant-keep-question-marks",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Keep question marks when stripping assistant-side punctuation. Default: false",
+    )
+    parser.add_argument(
+        "--assistant-keep-exclamation-marks",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Keep exclamation marks when stripping assistant-side punctuation. Default: false",
     )
     return parser.parse_args()
 
@@ -257,6 +320,57 @@ def normalize_content(content: str) -> str:
     return cleaned.strip()
 
 
+def strip_diacritics(text: str) -> str:
+    normalized = unicodedata.normalize("NFKD", text)
+    return "".join(char for char in normalized if not unicodedata.combining(char))
+
+
+def strip_punctuation(
+    text: str,
+    *,
+    keep_question_marks: bool,
+    keep_exclamation_marks: bool,
+) -> str:
+    stripped_lines: list[str] = []
+    for line in text.split("\n"):
+        chars: list[str] = []
+        for char in line:
+            if PUNCT_RE.fullmatch(char):
+                if char == "?" and keep_question_marks:
+                    chars.append(char)
+                elif char == "!" and keep_exclamation_marks:
+                    chars.append(char)
+                else:
+                    chars.append(" ")
+            else:
+                chars.append(char)
+        without_punct = "".join(chars)
+        without_punct = WHITESPACE_RE.sub(" ", without_punct).strip()
+        if without_punct:
+            stripped_lines.append(without_punct)
+    return "\n".join(stripped_lines)
+
+
+def apply_assistant_style(
+    text: str,
+    *,
+    strip_assistant_diacritics: bool,
+    strip_assistant_punctuation: bool,
+    keep_question_marks: bool,
+    keep_exclamation_marks: bool,
+) -> str:
+    styled = text
+    if strip_assistant_diacritics:
+        styled = strip_diacritics(styled)
+    if strip_assistant_punctuation:
+        styled = strip_punctuation(
+            styled,
+            keep_question_marks=keep_question_marks,
+            keep_exclamation_marks=keep_exclamation_marks,
+        )
+    return normalize_content(styled)
+
+
 def parse_message(raw_message: dict[str, Any], index: int) -> Message | None:
     author_id = get_author_id(raw_message)
     if author_id is None:
@@ -305,7 +419,15 @@ def sort_messages(messages: Iterable[Message]) -> list[Message]:
     )
 
 
-def merge_consecutive_messages(messages: list[Message], gap_seconds: int) -> list[Message]:
+def merge_consecutive_messages(
+    messages: list[Message],
+    *,
+    default_gap_seconds: int,
+    user_id: str,
+    assistant_id: str,
+    user_gap_seconds: int | None,
+    assistant_gap_seconds: int | None,
+) -> list[Message]:
     if not messages:
         return []
 
@@ -315,6 +437,11 @@ def merge_consecutive_messages(messages: list[Message], gap_seconds: int) -> lis
         same_author = previous.author_id == message.author_id
         within_gap = False
         if previous.timestamp and message.timestamp:
+            gap_seconds = default_gap_seconds
+            if message.author_id == user_id and user_gap_seconds is not None:
+                gap_seconds = user_gap_seconds
+            elif message.author_id == assistant_id and assistant_gap_seconds is not None:
+                gap_seconds = assistant_gap_seconds
             within_gap = (message.timestamp - previous.timestamp).total_seconds() <= gap_seconds
 
         if same_author and (within_gap or previous.timestamp is None or message.timestamp is None):
@@ -359,14 +486,39 @@ def build_samples(
     system_prompt: str,
     min_context_turns: int,
     max_context_turns: int,
+    strip_assistant_diacritics: bool,
+    strip_assistant_punctuation: bool,
+    keep_question_marks: bool,
+    keep_exclamation_marks: bool,
 ) -> list[dict[str, Any]]:
     samples: list[dict[str, Any]] = []
 
-    for index, message in enumerate(messages):
+    styled_messages: list[Message] = []
+    for message in messages:
+        if message.author_id == assistant_id:
+            styled_messages.append(
+                Message(
+                    author_id=message.author_id,
+                    author_name=message.author_name,
+                    content=apply_assistant_style(
+                        message.content,
+                        strip_assistant_diacritics=strip_assistant_diacritics,
+                        strip_assistant_punctuation=strip_assistant_punctuation,
+                        keep_question_marks=keep_question_marks,
+                        keep_exclamation_marks=keep_exclamation_marks,
+                    ),
+                    timestamp=message.timestamp,
+                    raw_index=message.raw_index,
+                )
+            )
+        else:
+            styled_messages.append(message)
+
+    for index, message in enumerate(styled_messages):
         if message.author_id != assistant_id:
             continue
 
-        context = messages[max(0, index - max_context_turns):index]
+        context = styled_messages[max(0, index - max_context_turns):index]
         context = [turn for turn in context if label_for_author(turn.author_id, user_id, assistant_id) is not None]
 
         if len(context) < min_context_turns:
@@ -408,6 +560,74 @@ def split_samples(samples: list[dict[str, Any]], validation_ratio: float) -> tup
     return samples[:split_index], samples[split_index:]
 
 
+def extract_style_tokens(text: str) -> list[str]:
+    return [token.lower() for token in STYLE_TOKEN_RE.findall(text)]
+
+
+def compute_style_stats(samples: list[dict[str, Any]]) -> dict[str, Any]:
+    assistant_messages = [
+        record["messages"][-1]["content"]
+        for record in samples
+        if record.get("messages") and record["messages"][-1].get("role") == "assistant"
+    ]
+    if not assistant_messages:
+        return {
+            "assistant_message_count": 0,
+            "average_chars": 0.0,
+            "average_lines": 0.0,
+            "fraction_without_polish_diacritics": 0.0,
+            "fraction_without_terminal_punctuation": 0.0,
+            "fraction_short_messages_le_12_chars": 0.0,
+            "fraction_multiline_messages": 0.0,
+            "fraction_lowercase_only": 0.0,
+            "fraction_with_question_burst": 0.0,
+            "fraction_with_repeated_characters_3plus": 0.0,
+            "fraction_with_chaotic_dm_marker": 0.0,
+            "marker_counts": {marker: 0 for marker in CHAOTIC_DM_MARKERS},
+        }
+
+    message_count = len(assistant_messages)
+    char_lengths = [len(message) for message in assistant_messages]
+    line_counts = [len(message.splitlines()) for message in assistant_messages]
+    no_diacritics = sum(1 for message in assistant_messages if not POLISH_DIACRITICS_RE.search(message))
+    no_terminal_punctuation = sum(
+        1 for message in assistant_messages if not TERMINAL_PUNCTUATION_RE.search(message.rstrip())
+    )
+    short_messages = sum(1 for message in assistant_messages if len(message) <= 12)
+    multiline_messages = sum(1 for message in assistant_messages if "\n" in message)
+    lowercase_only = sum(1 for message in assistant_messages if not UPPERCASE_LETTER_RE.search(message))
+    question_bursts = sum(1 for message in assistant_messages if QUESTION_BURST_RE.search(message))
+    repeated_characters = sum(1 for message in assistant_messages if REPEATED_CHARACTER_RE.search(message))
+    marker_counts = {marker: 0 for marker in CHAOTIC_DM_MARKERS}
+    marker_messages = 0
+
+    for message in assistant_messages:
+        tokens = extract_style_tokens(message)
+        message_markers = set()
+        for marker in CHAOTIC_DM_MARKERS:
+            hits = tokens.count(marker)
+            if hits:
+                marker_counts[marker] += hits
+                message_markers.add(marker)
+        if message_markers:
+            marker_messages += 1
+
+    return {
+        "assistant_message_count": message_count,
+        "average_chars": round(sum(char_lengths) / message_count, 2),
+        "average_lines": round(sum(line_counts) / message_count, 2),
+        "fraction_without_polish_diacritics": round(no_diacritics / message_count, 4),
+        "fraction_without_terminal_punctuation": round(no_terminal_punctuation / message_count, 4),
+        "fraction_short_messages_le_12_chars": round(short_messages / message_count, 4),
+        "fraction_multiline_messages": round(multiline_messages / message_count, 4),
+        "fraction_lowercase_only": round(lowercase_only / message_count, 4),
+        "fraction_with_question_burst": round(question_bursts / message_count, 4),
+        "fraction_with_repeated_characters_3plus": round(repeated_characters / message_count, 4),
+        "fraction_with_chaotic_dm_marker": round(marker_messages / message_count, 4),
+        "marker_counts": marker_counts,
+    }
+
+
 def write_jsonl(path: Path, records: list[dict[str, Any]]) -> None:
     with path.open("w", encoding="utf-8") as handle:
         for record in records:
@@ -425,6 +645,7 @@ def write_stats(
     sample_count: int,
     train_count: int,
     valid_count: int,
+    style_stats: dict[str, Any],
     args: argparse.Namespace,
 ) -> None:
     stats = {
@@ -435,6 +656,7 @@ def write_stats(
         "sample_count": sample_count,
         "train_count": train_count,
         "valid_count": valid_count,
+        "style_stats": style_stats,
         "config": {
             "user_id": args.user_id,
             "assistant_id": args.assistant_id,
@@ -442,7 +664,13 @@ def write_stats(
             "max_context_turns": args.max_context_turns,
             "min_context_turns": args.min_context_turns,
             "merge_gap_seconds": args.merge_gap_seconds,
+            "user_merge_gap_seconds": args.user_merge_gap_seconds,
+            "assistant_merge_gap_seconds": args.assistant_merge_gap_seconds,
             "max_samples": args.max_samples,
+            "assistant_strip_diacritics": args.assistant_strip_diacritics,
+            "assistant_strip_punctuation": args.assistant_strip_punctuation,
+            "assistant_keep_question_marks": args.assistant_keep_question_marks,
+            "assistant_keep_exclamation_marks": args.assistant_keep_exclamation_marks,
         },
     }
     path.write_text(json.dumps(stats, indent=2), encoding="utf-8")
@@ -477,7 +705,14 @@ def main() -> None:
         if label_for_author(message.author_id, args.user_id, args.assistant_id) is not None
     ]
 
-    merged_messages = merge_consecutive_messages(filtered_messages, args.merge_gap_seconds)
+    merged_messages = merge_consecutive_messages(
+        filtered_messages,
+        default_gap_seconds=args.merge_gap_seconds,
+        user_id=args.user_id,
+        assistant_id=args.assistant_id,
+        user_gap_seconds=args.user_merge_gap_seconds,
+        assistant_gap_seconds=args.assistant_merge_gap_seconds,
+    )
     samples = build_samples(
         merged_messages,
         user_id=args.user_id,
@@ -485,12 +720,17 @@ def main() -> None:
         system_prompt=args.system_prompt,
         min_context_turns=args.min_context_turns,
         max_context_turns=args.max_context_turns,
+        strip_assistant_diacritics=args.assistant_strip_diacritics,
+        strip_assistant_punctuation=args.assistant_strip_punctuation,
+        keep_question_marks=args.assistant_keep_question_marks,
+        keep_exclamation_marks=args.assistant_keep_exclamation_marks,
     )
 
     if args.max_samples > 0:
         samples = samples[: args.max_samples]
 
     train_samples, valid_samples = split_samples(samples, args.validation_ratio)
+    style_stats = compute_style_stats(samples)
 
     write_jsonl(output_dir / "train.jsonl", train_samples)
     write_jsonl(output_dir / "valid.jsonl", valid_samples)
@@ -503,6 +743,7 @@ def main() -> None:
         sample_count=len(samples),
         train_count=len(train_samples),
         valid_count=len(valid_samples),
+        style_stats=style_stats,
         args=args,
     )
 

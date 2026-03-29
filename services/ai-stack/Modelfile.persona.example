@@ -31,6 +31,18 @@ FROM qwen3.5:9b
 
 ADAPTER /lora-adapters/persona-adapter.gguf
 
+TEMPLATE """{{- if .Messages -}}
+{{- range .Messages }}<|im_start|>{{ .Role }}
+{{ .Content }}<|im_end|>
+{{- end }}<|im_start|>assistant
+{{- else -}}
+{{- if .System }}<|im_start|>system
+{{ .System }}<|im_end|>
+{{- end }}<|im_start|>user
+{{ .Prompt }}<|im_end|>
+<|im_start|>assistant
+{{- end -}}"""
+
 PARAMETER temperature 0.7
 PARAMETER top_p 0.85
 PARAMETER top_k 40

@@ -11,6 +11,7 @@ Related references:
 
 - `guide/AI_PERSONA_TRAINING.md` for design rationale and tradeoffs
 - `guide/AI_PERSONA_EVAL.md` for the detailed manual scoring rubric
+- `guide/AI_PERSONA_RESET.md` for removing old persona artifacts and rebuilding cleanly after a bad run
 - `services/ai-stack/scripts/README.md` for per-script reference details
 
 ---
@@ -36,8 +37,8 @@ If the run succeeds, you will end up with:
 
 1. `train.jsonl` and `valid.jsonl`
 2. a trained LoRA adapter directory under `/opt/ai-stack/data/training/runs/`
-3. a GGUF adapter export under `/opt/ai-stack/data/training/exports/`
-4. an Ollama model called `persona` created from `Modelfile.persona`
+3. a merged quantized GGUF export under `/opt/ai-stack/data/training/exports/`
+4. an Ollama model called `persona` created from `Modelfile.persona.merged`
 
 ---
 
@@ -68,8 +69,8 @@ Recommended source files to verify before running:
 3. Inspect `stats.json` and manually sample the dataset.
 4. Run one baseline Qwen 3.5 9B training job.
 5. Evaluate the result with held-out prompts.
-6. Export the adapter to GGUF.
-7. Deploy the adapter into Ollama as `persona`.
+6. Export a merged quantized GGUF.
+7. Deploy the merged model into Ollama as `persona`.
 8. Promote the model only if evaluation is good enough.
 
 ---
@@ -134,6 +135,31 @@ python services/ai-stack/scripts/build_persona_dataset.py \
   --validation-ratio 0.1
 ```
 
+The dataset builder now normalizes assistant-side replies by default to remove
+Polish diacritics and punctuation, which is useful when the target DM style is
+fast, plain, and ASCII-like.
+
+If the target often sends fragmented bursts as separate short messages, prefer:
+
+```bash
+python services/ai-stack/scripts/build_persona_dataset.py \
+  --input /opt/ai-stack/data/training/raw/discord-dm.json \
+  --output-dir /opt/ai-stack/data/training/processed/persona-v1 \
+  --user-id 123456789012345678 \
+  --assistant-id 987654321098765432 \
+  --max-context-turns 6 \
+  --min-context-turns 1 \
+  --user-merge-gap-seconds 180 \
+  --assistant-merge-gap-seconds 0 \
+  --assistant-strip-diacritics \
+  --assistant-strip-punctuation \
+  --assistant-keep-question-marks
+```
+
+This keeps your own nearby messages merged for context but preserves one target
+message per training label, which is usually the right shape for chaotic DM
+style transfers.
+
 What this should produce:
 
 - `/opt/ai-stack/data/training/processed/persona-v1/train.jsonl`
@@ -147,6 +173,7 @@ Manual checks before training:
 3. verify the target person is always the `assistant`
 4. verify your own messages are in the prompt context, not the answer label
 5. verify no obvious secrets survived normalization
+6. verify `style_stats` matches the target's real message shape, especially short-message rate and multiline rate
 
 Stop here if speaker mapping is wrong. Bad labels will poison the run.
 

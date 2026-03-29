@@ -15,6 +15,7 @@ This script expects the JSONL shape emitted by build_persona_dataset.py:
 The implementation is intentionally conservative:
 - single-GPU QLoRA
 - full-chat text rendering through the tokenizer chat template
+- assistant-only loss masking by default so the adapter learns reply style more than prompt reconstruction
 - adapter-only output
 
 It is a baseline, not a final experiment framework.
@@ -114,6 +115,12 @@ def parse_args() -> argparse.Namespace:
         default=True,
         help="Save only the adapter instead of a merged model. Default: true",
     )
+    parser.add_argument(
+        "--train-on-assistant-messages-only",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Mask loss to the final assistant reply only. Default: true",
+    )
     return parser.parse_args()
 
 
@@ -122,30 +129,56 @@ def load_runtime_dependencies() -> tuple[Any, Any, Any, Any, Any, Any]:
         # Unsloth must be imported before transformers/trl/peft to apply its patches.
         from unsloth import FastLanguageModel, is_bfloat16_supported
         from datasets import load_dataset
-        from transformers import DataCollatorForLanguageModeling, Trainer, TrainingArguments
+        from transformers import DataCollatorForSeq2Seq, Trainer, TrainingArguments
     except ImportError as exc:
         raise SystemExit(
             "Missing training dependencies. Run this inside the training container "
             "or install unsloth, datasets, and transformers."
         ) from exc
 
-    return load_dataset, TrainingArguments, Trainer, DataCollatorForLanguageModeling, FastLanguageModel, is_bfloat16_supported
+    return load_dataset, TrainingArguments, Trainer, DataCollatorForSeq2Seq, FastLanguageModel, is_bfloat16_supported
 
 
-def render_chat(example: dict[str, Any], tokenizer: Any) -> dict[str, str]:
+def render_chat(
+    example: dict[str, Any],
+    tokenizer: Any,
+    *,
+    train_on_assistant_messages_only: bool,
+) -> dict[str, str]:
     messages = example.get("messages")
     if not isinstance(messages, list) or not messages:
         raise ValueError("Each record must contain a non-empty 'messages' array.")
+
+    if train_on_assistant_messages_only:
+        if len(messages) < 2 or messages[-1].get("role") != "assistant":
+            raise ValueError(
+                "Assistant-only loss masking requires the final message in each record to be the assistant reply."
+            )
 
     text = tokenizer.apply_chat_template(
         messages,
         tokenize=False,
         add_generation_prompt=False,
     )
-    return {"text": text}
+
+    rendered = {"text": text}
+    if train_on_assistant_messages_only:
+        prompt_text = tokenizer.apply_chat_template(
+            messages[:-1],
+            tokenize=False,
+            add_generation_prompt=True,
+        )
+        rendered["prompt_text"] = prompt_text
+    return rendered
 
 
-def tokenize_chat(example: dict[str, str], tokenizer: Any, max_seq_length: int) -> dict[str, Any]:
+def tokenize_chat(
+    example: dict[str, str],
+    tokenizer: Any,
+    max_seq_length: int,
+    *,
+    train_on_assistant_messages_only: bool,
+) -> dict[str, Any]:
     text = example.get("text")
     if not isinstance(text, str) or not text:
         raise ValueError("Each rendered record must contain a non-empty 'text' field.")
@@ -158,9 +191,29 @@ def tokenize_chat(example: dict[str, str], tokenizer: Any, max_seq_length: int) 
         max_length=max_seq_length,
         padding=False,
     )
+    labels = list(tokens["input_ids"])
+
+    if train_on_assistant_messages_only:
+        prompt_text = example.get("prompt_text")
+        if not isinstance(prompt_text, str):
+            raise ValueError("Assistant-only loss masking requires a rendered 'prompt_text' field.")
+
+        prompt_tokens = text_tokenizer(
+            text=prompt_text,
+            truncation=True,
+            max_length=max_seq_length,
+            padding=False,
+        )
+        prompt_length = min(len(prompt_tokens["input_ids"]), len(labels))
+        for index in range(prompt_length):
+            labels[index] = -100
+
+    loss_token_count = sum(1 for token in labels if token != -100)
     return {
         "input_ids": tokens["input_ids"],
         "attention_mask": tokens["attention_mask"],
+        "labels": labels,
+        "loss_token_count": loss_token_count,
     }
 
 
@@ -175,7 +228,7 @@ def main() -> None:
     args = parse_args()
     save_run_config(args)
 
-    load_dataset, TrainingArguments, Trainer, DataCollatorForLanguageModeling, FastLanguageModel, is_bfloat16_supported = load_runtime_dependencies()
+    load_dataset, TrainingArguments, Trainer, DataCollatorForSeq2Seq, FastLanguageModel, is_bfloat16_supported = load_runtime_dependencies()
 
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=args.model_name,
@@ -202,24 +255,52 @@ def main() -> None:
 
     dataset = load_dataset("json", data_files=data_files)
     train_dataset = dataset["train"].map(
-        lambda row: render_chat(row, tokenizer),
+        lambda row: render_chat(
+            row,
+            tokenizer,
+            train_on_assistant_messages_only=args.train_on_assistant_messages_only,
+        ),
         remove_columns=dataset["train"].column_names,
     )
     train_dataset = train_dataset.map(
-        lambda row: tokenize_chat(row, tokenizer, args.max_seq_length),
+        lambda row: tokenize_chat(
+            row,
+            tokenizer,
+            args.max_seq_length,
+            train_on_assistant_messages_only=args.train_on_assistant_messages_only,
+        ),
         remove_columns=train_dataset.column_names,
     )
+    train_before_filter = len(train_dataset)
+    train_dataset = train_dataset.filter(lambda row: row["loss_token_count"] > 0)
+    train_dropped = train_before_filter - len(train_dataset)
+    train_dataset = train_dataset.remove_columns(["loss_token_count"])
 
     eval_dataset = None
     if "validation" in dataset and len(dataset["validation"]) > 0:
         eval_dataset = dataset["validation"].map(
-            lambda row: render_chat(row, tokenizer),
+            lambda row: render_chat(
+                row,
+                tokenizer,
+                train_on_assistant_messages_only=args.train_on_assistant_messages_only,
+            ),
             remove_columns=dataset["validation"].column_names,
         )
         eval_dataset = eval_dataset.map(
-            lambda row: tokenize_chat(row, tokenizer, args.max_seq_length),
+            lambda row: tokenize_chat(
+                row,
+                tokenizer,
+                args.max_seq_length,
+                train_on_assistant_messages_only=args.train_on_assistant_messages_only,
+            ),
             remove_columns=eval_dataset.column_names,
         )
+        eval_before_filter = len(eval_dataset)
+        eval_dataset = eval_dataset.filter(lambda row: row["loss_token_count"] > 0)
+        eval_dropped = eval_before_filter - len(eval_dataset)
+        eval_dataset = eval_dataset.remove_columns(["loss_token_count"])
+    else:
+        eval_dropped = 0
 
     bf16_supported = is_bfloat16_supported()
     training_args = TrainingArguments(
@@ -243,7 +324,11 @@ def main() -> None:
         seed=args.random_state,
     )
 
-    data_collator = DataCollatorForLanguageModeling(tokenizer=text_tokenizer, mlm=False)
+    data_collator = DataCollatorForSeq2Seq(
+        tokenizer=text_tokenizer,
+        padding=True,
+        label_pad_token_id=-100,
+    )
 
     trainer = Trainer(
         model=model,
@@ -262,6 +347,10 @@ def main() -> None:
         trainer.save_model(args.output_dir)
         tokenizer.save_pretrained(args.output_dir)
 
+    if train_dropped:
+        print(f"Dropped {train_dropped} training samples with no assistant loss tokens after truncation.")
+    if eval_dropped:
+        print(f"Dropped {eval_dropped} validation samples with no assistant loss tokens after truncation.")
     print(f"Saved training artifacts to {args.output_dir}")
 
 

@@ -27,6 +27,7 @@ Before evaluating:
 2. Compare outputs from the base model and the persona model.
 3. Keep temperature, top_p, and top_k fixed during comparison.
 4. Log the prompt, output, and score for each test case.
+5. Keep `stats.json` from the dataset run nearby and compare generations against `style_stats`, not just against your intuition.
 
 Recommended sample size:
 
@@ -89,6 +90,12 @@ Score each response from **1 to 5**.
 - `3` = acceptable but uneven
 - `5` = reads like a real DM reply
 
+### Chaotic DM Style Match
+
+- `1` = too polished, too grammatical, or too paragraph-like
+- `3` = some casual markers appear but the output still feels cleaned up
+- `5` = message length, segmentation, lowercase habits, and roughness match the target's DM style
+
 ### Context Fit
 
 - `1` = ignores the prompt context
@@ -118,6 +125,8 @@ Reject or retrain the model if you observe any of these repeatedly:
 - tone that is too exaggerated compared with the real person
 - reduced coherence compared with the base model
 - inability to answer simple held-out prompts naturally
+- outputs that are consistently too polished compared with dataset `style_stats`
+- outputs that collapse fragmented DM bursts into one neat sentence every time
 
 ---
 
@@ -132,6 +141,16 @@ Suggested pass threshold:
 - average **Style Match >= 4.0**
 - average **Naturalness >= 4.0**
 - average **Memorization Risk >= 4.5**
+
+For chaotic Polish DM targets, also compare the held-out generations against
+dataset `style_stats` for:
+
+- short-message frequency
+- lowercase-only frequency
+- no-diacritic frequency
+- `??` burst frequency
+- repeated-character frequency
+- marker counts like `xd`, `xddd`, `nw`, `serio`, `kirwa`
 
 If style improves but leakage risk drops, do not promote the model.
 
