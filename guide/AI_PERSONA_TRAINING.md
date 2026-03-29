@@ -757,6 +757,9 @@ python /repo/services/ai-stack/scripts/export_persona_merged_gguf.sh \
    --output-file /workspace/exports/persona-merged.gguf \
    --llama-cpp-dir /opt/llama.cpp
 
+This merged export defaults to `q8_0`, which is the recommended starting point
+for Ollama deployment on this 24 GB 3090 host.
+
 cd services/ai-stack
 ./deploy-persona-merged.sh --model-name persona --force
 ```

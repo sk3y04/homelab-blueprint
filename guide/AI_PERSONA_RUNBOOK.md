@@ -324,6 +324,9 @@ python /repo/services/ai-stack/scripts/export_persona_merged_gguf.sh \
   --llama-cpp-dir /opt/llama.cpp
 ```
 
+This helper defaults to `q8_0` for the merged GGUF export, which is the better
+Ollama target on this 24 GB RTX 3090 host.
+
 Expected output:
 
 ```text

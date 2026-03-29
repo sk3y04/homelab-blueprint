@@ -424,6 +424,9 @@ python /repo/services/ai-stack/scripts/export_persona_merged_gguf.sh \
   --llama-cpp-dir /opt/llama.cpp
 ```
 
+By default, this exports the merged model as `q8_0`. That is the recommended
+starting point for Ollama on this 24 GB 3090 host.
+
 Important notes:
 
 - this path produces a full merged model, not an adapter-only GGUF

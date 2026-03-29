@@ -25,6 +25,8 @@ Usage:
 Notes:
   Run this inside the training container or another environment with peft,
   torch, and transformers installed.
+  Default output type is q8_0, which is a better fit than f16 for Ollama
+  deployment on a 24 GB RTX 3090.
 EOF
 }
 
@@ -33,7 +35,7 @@ MERGED_DIR=""
 OUTPUT_FILE=""
 BASE_MODEL=""
 LLAMA_CPP_DIR="${LLAMA_CPP_DIR:-}"
-OUTTYPE="f16"
+OUTTYPE="q8_0"
 DEVICE_MAP="auto"
 MAX_SHARD_SIZE="5GB"
 
