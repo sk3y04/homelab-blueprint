@@ -301,20 +301,51 @@ Expected output:
 
 ---
 
-## Step 9: Deploy Into Ollama
+## Step 9: Merge the Adapter Into a Runnable Full Model
+
+Because current Ollama releases in this stack may not run `ADAPTER`-backed
+models at inference time, merge the LoRA into the base model and export a full
+GGUF inside the training container.
 
 Run:
 
 ```bash
 cd services/ai-stack
-./deploy-persona.sh --model-name persona --force
+docker compose --profile training run --rm training
+
+python /repo/services/ai-stack/scripts/merge_persona_model.py \
+  --adapter-dir /workspace/runs/persona-v1-qwen35-9b \
+  --output-dir /workspace/merged/persona-v1-qwen35-9b
+
+python /repo/services/ai-stack/scripts/export_persona_merged_gguf.sh \
+  --adapter-dir /workspace/runs/persona-v1-qwen35-9b \
+  --merged-dir /workspace/merged/persona-v1-qwen35-9b \
+  --output-file /workspace/exports/persona-merged.gguf \
+  --llama-cpp-dir /opt/llama.cpp
+```
+
+Expected output:
+
+```text
+/opt/ai-stack/data/training/exports/persona-merged.gguf
+```
+
+---
+
+## Step 10: Deploy Into Ollama
+
+Run:
+
+```bash
+cd services/ai-stack
+./deploy-persona-merged.sh --model-name persona --force
 ```
 
 This will:
 
-1. copy the GGUF adapter into the live adapter directory
+1. copy the merged full GGUF into the live merged-model directory
 2. recreate the Ollama service if needed
-3. create the `persona` model from `/models/Modelfile.persona`
+3. create the `persona` model from `/models/Modelfile.persona.merged`
 
 Quick validation:
 
@@ -325,7 +356,7 @@ docker exec ai-ollama ollama run persona "hey, what's up?"
 
 ---
 
-## Step 10: Promote the Model
+## Step 11: Promote the Model
 
 Only promote after evaluation passes.
 

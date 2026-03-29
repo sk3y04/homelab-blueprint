@@ -28,10 +28,13 @@ Scripts in this directory:
 - `train_persona_unsloth.py`
 - `bootstrap_llama_cpp.sh`
 - `export_persona_adapter.sh`
+- `merge_persona_model.py`
+- `export_persona_merged_gguf.sh`
 
 Related operator helpers in the parent directory:
 
 - `../deploy-persona.sh`
+- `../deploy-persona-merged.sh`
 - `../promote-persona-defaults.sh`
 
 ---
@@ -86,7 +89,8 @@ The normal order is:
 2. run LoRA training with `train_persona_unsloth.py`
 3. bootstrap `llama.cpp` with `bootstrap_llama_cpp.sh`
 4. export the adapter with `export_persona_adapter.sh`
-5. deploy the adapter with `../deploy-persona.sh`
+5. if Ollama cannot run adapters, merge and export a full GGUF with `merge_persona_model.py` and `export_persona_merged_gguf.sh`
+6. deploy the runnable model with `../deploy-persona-merged.sh`
 6. optionally promote the persona model with `../promote-persona-defaults.sh`
 
 ---
@@ -392,7 +396,43 @@ Common failure causes:
 
 ---
 
-## 5. Deploy Persona Model to Ollama
+## 5. Merge and Export a Runnable Full GGUF
+
+Scripts:
+
+- `merge_persona_model.py`
+- `export_persona_merged_gguf.sh`
+
+Purpose:
+
+- merge the trained LoRA adapter into the base model
+- export a full GGUF that Ollama can actually run even when `ADAPTER` runtime loading is unavailable
+
+Run this inside the training container after training completes:
+
+```bash
+cd services/ai-stack
+docker compose --profile training run --rm training
+python /repo/services/ai-stack/scripts/merge_persona_model.py \
+  --adapter-dir /workspace/runs/persona-v1-qwen35-9b \
+  --output-dir /workspace/merged/persona-v1-qwen35-9b
+
+python /repo/services/ai-stack/scripts/export_persona_merged_gguf.sh \
+  --adapter-dir /workspace/runs/persona-v1-qwen35-9b \
+  --merged-dir /workspace/merged/persona-v1-qwen35-9b \
+  --output-file /workspace/exports/persona-merged.gguf \
+  --llama-cpp-dir /opt/llama.cpp
+```
+
+Important notes:
+
+- this path produces a full merged model, not an adapter-only GGUF
+- it needs enough disk space for both the merged Hugging Face checkpoint and the final GGUF
+- the merged GGUF is the correct artifact for Ollama on hosts where `ADAPTER` inference is not implemented
+
+---
+
+## 6. Deploy Persona Model to Ollama
 
 Script:
 
@@ -403,6 +443,15 @@ Purpose:
 - copy the exported GGUF adapter into the live adapter directory
 - recreate `ollama`
 - create the custom persona model from `/models/Modelfile.persona`
+
+Important runtime limitation:
+
+- current Ollama releases may accept the `ADAPTER`-based Modelfile during `ollama create`
+- the same model can still fail at inference time with `failed to initialize model: loras are not yet implemented`
+- when that happens, the adapter export is valid, but Ollama cannot serve it directly
+- the viable path is to merge the LoRA into a full model and import the merged GGUF into Ollama, or use a runtime with LoRA adapter support
+
+If you need a runnable Ollama model on current releases, use `../deploy-persona-merged.sh` instead.
 
 Usage:
 
@@ -433,6 +482,10 @@ What it assumes:
 - the Ollama service mounts `/lora-adapters` and `/models/Modelfile.persona`
 - `ai-ollama` is the container name
 
+What it does not guarantee:
+
+- successful runtime inference from an `ADAPTER` directive on all Ollama versions
+
 Quick validation after deployment:
 
 ```bash
@@ -448,7 +501,44 @@ Current default behavior for the persona path in this repo:
 
 ---
 
-## 6. Promote Persona as the Default Model
+## 7. Deploy Merged Persona Model to Ollama
+
+Script:
+
+- `../deploy-persona-merged.sh`
+
+Purpose:
+
+- copy the merged full GGUF into the live merged-model directory
+- recreate `ollama`
+- create the custom persona model from `/models/Modelfile.persona.merged`
+
+Usage:
+
+```bash
+cd services/ai-stack
+./deploy-persona-merged.sh --model-name persona --force
+```
+
+Alternative usage with an explicit merged GGUF path:
+
+```bash
+cd services/ai-stack
+./deploy-persona-merged.sh \
+  --model-file /opt/ai-stack/data/training/exports/persona-merged.gguf \
+  --model-name persona \
+  --force
+```
+
+Quick validation:
+
+```bash
+docker exec ai-ollama ollama run persona "hey, what's up?"
+```
+
+---
+
+## 8. Promote Persona as the Default Model
 
 Script:
 
@@ -525,8 +615,19 @@ cd services/ai-stack
   --base-model Qwen/Qwen3.5-9B \
   --llama-cpp-dir /opt/llama.cpp
 
+# Merge and export a runnable full GGUF inside the training container
+docker compose --profile training run --rm training
+python /repo/services/ai-stack/scripts/merge_persona_model.py \
+  --adapter-dir /workspace/runs/persona-v1-qwen35-9b \
+  --output-dir /workspace/merged/persona-v1-qwen35-9b
+python /repo/services/ai-stack/scripts/export_persona_merged_gguf.sh \
+  --adapter-dir /workspace/runs/persona-v1-qwen35-9b \
+  --merged-dir /workspace/merged/persona-v1-qwen35-9b \
+  --output-file /workspace/exports/persona-merged.gguf \
+  --llama-cpp-dir /opt/llama.cpp
+
 # Deploy and promote
-./deploy-persona.sh --model-name persona --force
+./deploy-persona-merged.sh --model-name persona --force
 ./promote-persona-defaults.sh --model-name persona --recreate
 
 # Return GPU to normal inference mode

@@ -1,0 +1,31 @@
+# ==========================================================================
+# Ollama Modelfile — Merged Persona GGUF Model
+# ==========================================================================
+# This Modelfile loads a full merged GGUF model that already contains the
+# persona fine-tuning weights. Use this path when Ollama cannot run ADAPTER
+# directives at inference time.
+#
+# Prerequisites:
+#   1. Merge the LoRA adapter into the base model.
+#   2. Export the merged full model to GGUF.
+#   3. Place the merged GGUF file at:
+#      /opt/ai-stack/data/merged-models/persona-merged.gguf
+#   4. Create the model in Ollama:
+#      docker exec ai-ollama ollama create persona -f /models/Modelfile.persona.merged
+# ==========================================================================
+
+FROM /merged-models/persona-merged.gguf
+
+PARAMETER temperature 0.8
+PARAMETER top_p 0.9
+PARAMETER top_k 40
+PARAMETER repeat_penalty 1.1
+PARAMETER num_ctx 8192
+
+SYSTEM """
+You are a persona model trained on real conversation data. Match the
+writing style, tone, and personality of the training data. Be natural,
+authentic, and conversational. Respond directly and keep answers brief by
+default. Do not reveal internal reasoning, chain-of-thought, or step-by-step
+deliberation unless the user explicitly asks for a detailed explanation.
+"""

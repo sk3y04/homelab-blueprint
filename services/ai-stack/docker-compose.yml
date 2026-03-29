@@ -58,7 +58,9 @@ services:
     volumes:
       - ${AI_ACTIVE_DATA_DIR}/ollama:/root/.ollama
       - ${AI_ACTIVE_DATA_DIR}/lora-adapters:/lora-adapters:ro
+      - ${AI_ACTIVE_DATA_DIR}/merged-models:/merged-models:ro
       - ./Modelfile.persona.example:/models/Modelfile.persona:ro
+      - ./Modelfile.persona.merged.example:/models/Modelfile.persona.merged:ro
 
     deploy:
       resources:
@@ -285,6 +287,7 @@ services:
       - ${AI_ACTIVE_DATA_DIR}/training:/workspace
       - ${AI_ACTIVE_DATA_DIR}/lora-adapters:/output
       - ${AI_ARCHIVE_DATA_DIR}:/archive
+      - ${LLAMA_CPP_DIR:-/opt/llama.cpp}:/opt/llama.cpp:ro
       - ../../:/repo:ro
 
     deploy:

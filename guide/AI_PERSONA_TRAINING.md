@@ -732,7 +732,32 @@ Example deployment command:
 
 ```bash
 cd services/ai-stack
-./deploy-persona.sh --model-name persona --force
+./deploy-persona-merged.sh --model-name persona --force
+```
+
+Note:
+
+- the supported Ollama path in this repository is now a merged full-model GGUF workflow
+- adapter GGUF export is still useful for archival or alternative runtimes, but not as the primary Ollama deployment artifact in this environment
+
+Merged full-model export example:
+
+```bash
+cd services/ai-stack
+docker compose --profile training run --rm training
+
+python /repo/services/ai-stack/scripts/merge_persona_model.py \
+   --adapter-dir /workspace/runs/persona-v1-qwen35-9b \
+   --output-dir /workspace/merged/persona-v1-qwen35-9b
+
+python /repo/services/ai-stack/scripts/export_persona_merged_gguf.sh \
+   --adapter-dir /workspace/runs/persona-v1-qwen35-9b \
+   --merged-dir /workspace/merged/persona-v1-qwen35-9b \
+   --output-file /workspace/exports/persona-merged.gguf \
+   --llama-cpp-dir /opt/llama.cpp
+
+cd services/ai-stack
+./deploy-persona-merged.sh --model-name persona --force
 ```
 
 After promoting a successful persona run, you can also switch client defaults:

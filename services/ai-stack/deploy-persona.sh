@@ -21,6 +21,19 @@ Usage:
 EOF
 }
 
+warn_adapter_runtime_limit() {
+  local modelfile_path="$1"
+
+  if [ -f "$modelfile_path" ] && grep -q '^ADAPTER ' "$modelfile_path"; then
+    echo "WARNING: This Modelfile uses an ADAPTER directive."
+    echo "Current Ollama builds may allow 'ollama create' to succeed but still fail at runtime with:"
+    echo "  failed to initialize model: loras are not yet implemented"
+    echo "If that happens, this GGUF adapter export is valid, but Ollama cannot serve it directly in this environment."
+    echo "Use a merged full-model GGUF workflow or a runtime that supports LoRA adapters."
+    echo ""
+  fi
+}
+
 if [ -f .env ]; then
   set -a
   # shellcheck disable=SC1091
@@ -64,6 +77,8 @@ if [ ! -f "$ADAPTER_FILE" ]; then
   exit 1
 fi
 
+warn_adapter_runtime_limit "./Modelfile.persona.example"
+
 mkdir -p "$LIVE_ADAPTER_DIR"
 cp "$ADAPTER_FILE" "$LIVE_ADAPTER_FILE"
 
@@ -83,5 +98,7 @@ echo "Deployment complete."
 echo "  Model name:    $MODEL_NAME"
 echo "  Adapter file:  $LIVE_ADAPTER_FILE"
 echo ""
+warn_adapter_runtime_limit "./Modelfile.persona.example"
+
 echo "Quick test:"
 echo "  docker exec ai-ollama ollama run $MODEL_NAME \"hey, what's up?\""

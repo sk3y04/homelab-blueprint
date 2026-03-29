@@ -4,13 +4,21 @@
 # This Modelfile creates a custom model from a LoRA adapter trained on
 # your Discord conversations. It uses qwen3.5:9b as the base model.
 #
+# Important:
+#   Some Ollama releases accept ADAPTER at model creation time but still fail
+#   when you run the model with:
+#     failed to initialize model: loras are not yet implemented
+#   In that case, the adapter export is valid, but Ollama cannot serve it
+#   directly. Use a merged full-model GGUF instead.
+#
 # Prerequisites:
 #   1. Train a LoRA adapter using your conversation data.
 #   2. Export the adapter to GGUF format (e.g. with llama.cpp's
 #      convert_lora_to_gguf.py).
 #   3. Place the adapter file at:
 #      /opt/ai-stack/data/lora-adapters/persona-adapter.gguf
-#   4. Create the model in Ollama:
+#   4. Create the model in Ollama only if your Ollama build supports runtime
+#      adapter loading:
 #      docker exec ai-ollama ollama create persona -f /models/Modelfile.persona
 #
 # To use this Modelfile, mount it into the Ollama container. Add this
