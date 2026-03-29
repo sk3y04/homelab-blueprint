@@ -107,6 +107,16 @@ fi
 
 if [ ! -f "$CONVERTER" ]; then
   echo "ERROR: llama.cpp converter not found: $CONVERTER"
+  if [ "$LLAMA_CPP_DIR" != "/opt/llama.cpp" ] && [ -f "/opt/llama.cpp/convert_hf_to_gguf.py" ]; then
+    echo "Hint: inside the training container, llama.cpp is mounted at /opt/llama.cpp."
+    echo "Use: --llama-cpp-dir /opt/llama.cpp"
+  elif [ "$LLAMA_CPP_DIR" = "/opt/llama.cpp" ] && [ ! -d "/opt/llama.cpp" ]; then
+    echo "Hint: /opt/llama.cpp is not mounted in this container."
+    echo "Recreate the training container after updating docker-compose.yml so the llama.cpp bind mount is present."
+  elif [ "$LLAMA_CPP_DIR" = "/opt/llama.cpp" ] && [ -d "/opt/llama.cpp" ]; then
+    echo "Hint: /opt/llama.cpp exists but does not contain convert_hf_to_gguf.py."
+    echo "Verify the host checkout path in LLAMA_CPP_DIR and recreate the training container if needed."
+  fi
   exit 1
 fi
 
