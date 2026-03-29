@@ -711,6 +711,16 @@ cd services/ai-stack
    --llama-cpp-dir /opt/llama.cpp
 ```
 
+If the host cannot reach GitHub directly, bootstrap from an internal mirror or
+local git checkout instead:
+
+```bash
+cd services/ai-stack
+./scripts/bootstrap_llama_cpp.sh \
+   --install-dir /opt/llama.cpp \
+   --repo-url /srv/git/llama.cpp
+```
+
 Example deployment command:
 
 ```bash

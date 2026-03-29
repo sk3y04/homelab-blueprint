@@ -259,6 +259,35 @@ Script:
 
 Purpose:
 
+- clone and build `llama.cpp` for GGUF conversion tooling
+
+Basic usage:
+
+```bash
+cd services/ai-stack
+./scripts/bootstrap_llama_cpp.sh --install-dir /opt/llama.cpp
+```
+
+If the host cannot reach GitHub directly, point the script at an internal mirror or
+an already-seeded local git checkout:
+
+```bash
+cd services/ai-stack
+./scripts/bootstrap_llama_cpp.sh \
+  --install-dir /opt/llama.cpp \
+  --repo-url /srv/git/llama.cpp
+```
+
+You can also use an environment override:
+
+```bash
+LLAMA_CPP_REPO_URL=ssh://git@git.example.lan/infra/llama.cpp.git \
+  ./scripts/bootstrap_llama_cpp.sh --install-dir /opt/llama.cpp
+```
+
+If the script fails with `Could not resolve host`, that host has a DNS or outbound
+network problem. Fix host networking or use `--repo-url` with a reachable source.
+
 - clone or update `llama.cpp`
 - install conversion dependencies
 - build the conversion tools with CUDA enabled

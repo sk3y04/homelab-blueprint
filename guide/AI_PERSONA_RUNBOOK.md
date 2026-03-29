@@ -256,6 +256,16 @@ cd services/ai-stack
 ./scripts/bootstrap_llama_cpp.sh --install-dir /opt/llama.cpp
 ```
 
+If the training host cannot resolve or reach GitHub, rerun against an internal
+mirror or local git source:
+
+```bash
+cd services/ai-stack
+./scripts/bootstrap_llama_cpp.sh \
+  --install-dir /opt/llama.cpp \
+  --repo-url /srv/git/llama.cpp
+```
+
 This provides the conversion tooling used by the export helper.
 
 ---
