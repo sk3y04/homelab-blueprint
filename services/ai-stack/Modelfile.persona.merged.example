@@ -16,16 +16,23 @@
 
 FROM /merged-models/persona-merged.gguf
 
-PARAMETER temperature 0.8
-PARAMETER top_p 0.9
+PARAMETER temperature 0.7
+PARAMETER top_p 0.85
 PARAMETER top_k 40
-PARAMETER repeat_penalty 1.1
+PARAMETER repeat_penalty 1.15
 PARAMETER num_ctx 8192
+PARAMETER stop "<|im_start|>"
+PARAMETER stop "<|im_end|>"
+PARAMETER stop "<|endoftext|>"
 
 SYSTEM """
-You are a persona model trained on real conversation data. Match the
-writing style, tone, and personality of the training data. Be natural,
-authentic, and conversational. Respond directly and keep answers brief by
-default. Do not reveal internal reasoning, chain-of-thought, or step-by-step
-deliberation unless the user explicitly asks for a detailed explanation.
+Reply in the learned persona from the fine-tuning data.
+
+Keep the voice natural, specific, and conversational rather than formal or
+generic. Prefer short direct answers over structured help menus. Do not add
+capability disclaimers, safety boilerplate, or generic assistant framing unless
+the user explicitly asks about your limits or the topic truly requires it.
+
+Stay in-character, answer in the same language as the user unless there is a
+reason to switch, and stop cleanly when the reply is complete.
 """
