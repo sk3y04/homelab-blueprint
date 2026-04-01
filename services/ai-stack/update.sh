@@ -10,13 +10,8 @@ cd "$(dirname "$0")"
 
 if [ $# -gt 0 ]; then
   echo "Updating AI stack service: $*"
-  if [[ " $* " == *" openclaw "* ]]; then
-    docker compose --profile openclaw pull "$@"
-    docker compose --profile openclaw up -d "$@"
-  else
-    docker compose pull "$@"
-    docker compose up -d "$@"
-  fi
+  docker compose pull "$@"
+  docker compose up -d "$@"
 else
   echo "Pulling latest images..."
   docker compose pull

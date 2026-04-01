@@ -1,11 +1,13 @@
-# AI Stack — Ollama + Open WebUI + OpenClaw + OpenCode
+# AI Stack — Ollama + Open WebUI + OpenCode
 
 Local LLM inference stack for an NVIDIA RTX 3090 24 GB. **Ollama** serves
 quantized models via a REST API, **Open WebUI** provides a full-featured
-chat interface, **OpenClaw** adds an agent layer with future Discord
-integration, **OpenCode** provides a browser-based coding agent backed by the
+chat interface, **OpenCode** provides a browser-based coding agent backed by the
 same local models, and **DCGM Exporter** feeds GPU metrics into the existing
 homelab Prometheus + Grafana.
+
+> **OpenClaw** has been separated into its own standalone deployment at
+> `services/openclaw/`. See `guide/OPENCLAW.md` for setup and operational docs.
 
 ```
                   ┌────────────────┐
@@ -15,10 +17,6 @@ You ──► browser ──┤  Open WebUI    │
                   ┌────────────────┐               │
 You ──► browser ──┤  OpenCode      │───────────────┘
                   │  :4096         │
-                  └────────────────┘
-                  ┌────────────────┐               │
-Discord (future)──┤  OpenClaw      │───────────────┘
-                  │  :8081         │
                   └────────────────┘
 
                   ┌────────────────┐
@@ -36,16 +34,15 @@ Prometheus ◄──────┤ DCGM Exporter  │◄── RTX 3090
 5. [Quick Start](#quick-start)
 6. [Model Strategy](#model-strategy)
 7. [Model Bootstrap](#model-bootstrap)
-8. [OpenClaw Configuration](#openclaw-configuration)
-9. [OpenCode Configuration](#opencode-configuration)
-10. [GPU Power Management](#gpu-power-management)
-11. [Monitoring](#monitoring)
-12. [LoRA Training Pipeline](#lora-training-pipeline)
-13. [Security](#security)
-14. [Backup & Restore](#backup--restore)
-15. [Validation Checklist](#validation-checklist)
-16. [Troubleshooting](#troubleshooting)
-17. [Upgrade Procedure](#upgrade-procedure)
+8. [OpenCode Configuration](#opencode-configuration)
+9. [GPU Power Management](#gpu-power-management)
+10. [Monitoring](#monitoring)
+11. [LoRA Training Pipeline](#lora-training-pipeline)
+12. [Security](#security)
+13. [Backup & Restore](#backup--restore)
+14. [Validation Checklist](#validation-checklist)
+15. [Troubleshooting](#troubleshooting)
+16. [Upgrade Procedure](#upgrade-procedure)
 
 For a full persona fine-tuning plan tailored to this exact RTX 3090-based stack,
 see `guide/AI_PERSONA_TRAINING.md`.
@@ -67,7 +64,6 @@ and promotion commands, see `services/ai-stack/scripts/README.md`.
 | **Container** | `ai-ollama` | LLM runtime with GPU passthrough. |
 | **Container** | `ai-open-webui` | Web chat UI. CPU only — talks to Ollama over Docker network. |
 | **Container** | `ai-opencode` | Browser-based coding agent. CPU only — talks to Ollama over Docker network and works on the checked-out repo bind-mounted at `/workspace`. |
-| **Container** | `ai-openclaw` | Agent layer. CPU only — talks to Ollama's OpenAI-compatible API. |
 | **Container** | `ai-dcgm-exporter` | GPU metrics exporter. Joins the existing `monitoring` network. |
 
 ### Network layout
@@ -76,9 +72,8 @@ and promotion commands, see `services/ai-stack/scripts/README.md`.
 ┌─── ai-stack network (bridge) ──────────────────────────────────┐
 │  ollama:11434 ◄── open-webui                                   │
 │        ▲          ◄── opencode                                 │
-│        └──────────◄── openclaw                                 │
 │  dcgm-exporter:9400                                            │
-└────────────────────────────────────────────────────────────────┘
+└────────────────────────────────────────────────────────────┘
          │
          ├── dcgm-exporter also joins ─► monitoring network (external)
          │                                  └── prometheus scrapes it
@@ -87,7 +82,6 @@ and promotion commands, see `services/ai-stack/scripts/README.md`.
              :8080             Open WebUI      (host-published)
              :4096             OpenCode        (host-published)
              127.0.0.1:11434   Ollama API
-             127.0.0.1:8081    OpenClaw
              127.0.0.1:9400    DCGM Exporter
 ```
 
@@ -100,7 +94,6 @@ Active data under `$AI_ACTIVE_DATA_DIR` (default `/opt/ai-stack/data`):
 ├── ollama/          # Models, manifests, blobs (~20-40 GB per model)
 ├── open-webui/      # SQLite DB, chat history, user accounts
 ├── opencode/        # Sessions, auth storage, config cache, snapshots
-├── openclaw/        # Agent state and conversation logs
 └── lora-adapters/   # Future: exported GGUF LoRA adapters
 ```
 
@@ -164,10 +157,8 @@ services/ai-stack/
 ├── set-gpu-inference.sh
 ├── set-gpu-training.sh
 └── config/
-  ├── opencode/
-  │   └── opencode.json
-    └── openclaw/
-        └── config.yaml
+  └── opencode/
+      └── opencode.json
 ```
 
 Dashboard and scrape configs are added to the existing monitoring stack:
@@ -252,7 +243,7 @@ sudo usermod -aG docker "$USER"
 ### 4. Create data directories
 
 ```bash
-sudo mkdir -p /opt/ai-stack/data/{ollama,open-webui,opencode,openclaw,lora-adapters,training}
+sudo mkdir -p /opt/ai-stack/data/{ollama,open-webui,opencode,lora-adapters,training}
 sudo mkdir -p /mnt/archive/ai-stack/{raw-datasets,archived-runs,archived-models,backups}
 sudo chown -R "$(id -u):$(id -g)" /opt/ai-stack /mnt/archive/ai-stack
 ```
@@ -424,9 +415,7 @@ docker exec ai-ollama ollama create persona -f /models/Modelfile.persona
 # 4. Test it
 docker exec ai-ollama ollama run persona "Hey, what's up?"
 
-# 5. Update OpenClaw config to use the persona model:
-#    Edit config/openclaw/config.yaml → llm.default_model: persona:latest
-#    Restart: docker compose restart openclaw
+# 5. (Optional) Update OpenClaw to use the persona model — see guide/OPENCLAW.md
 ```
 
 The Ollama service now mounts both the persona Modelfile and the live
@@ -434,49 +423,6 @@ The Ollama service now mounts both the persona Modelfile and the live
 compose edit.
 
 ---
-
-## OpenClaw Configuration
-
-OpenClaw is configured via `config/openclaw/config.yaml`. Key settings:
-
-- **Backend**: Points to `http://ollama:11434/v1` (OpenAI-compatible)
-- **Default model**: `qwen3.5:27b` — change to `persona:latest` after training
-- **Discord integration**: Disabled by default. Uncomment the `discord` section in the config when ready.
-
-### Switching models
-
-Edit `config/openclaw/config.yaml`:
-
-```yaml
-llm:
-  default_model: persona:latest   # was: qwen3.5:27b
-```
-
-Then restart: `docker compose restart openclaw`
-
-### Discord integration (future)
-
-When ready to connect OpenClaw to Discord:
-
-1. Create a Discord bot at https://discord.com/developers/applications
-2. Enable the **Message Content Intent** in Bot settings
-3. Edit `config/openclaw/config.yaml`:
-
-```yaml
-integrations:
-  discord:
-    enabled: true
-    bot_token: "your-bot-token-here"
-    guild_ids: [123456789]
-    channel_ids: [987654321]
-    model: persona:latest
-```
-
-4. Restart: `docker compose restart openclaw`
-
-> **Security note**: Store the Discord bot token in `.env` and reference it via
-> environment variable rather than hardcoding in the YAML, if OpenClaw supports
-> `${DISCORD_BOT_TOKEN}` substitution. Check OpenClaw docs for the exact mechanism.
 
 ---
 
@@ -618,9 +564,6 @@ docker logs ai-ollama --tail 100 -f
 # Open WebUI logs
 docker logs ai-open-webui --tail 100 -f
 
-# OpenClaw logs
-docker logs ai-openclaw --tail 100 -f
-
 # OpenCode logs
 docker logs ai-opencode --tail 100 -f
 
@@ -657,7 +600,7 @@ deployment flow for Discord DM persona fine-tuning on this host, see
 3. **Train LoRA** → using `unsloth` or `axolotl` in a GPU container
 4. **Export adapter** → GGUF format via `llama.cpp`
 5. **Create Ollama model** → using `Modelfile.persona.example` with `qwen3.5:9b` as the base
-6. **Switch OpenClaw** → point to `persona:latest`
+6. **Deploy to OpenClaw** → see `guide/OPENCLAW.md`
 
 ### Training container
 
@@ -695,14 +638,13 @@ The `profiles: ["training"]` key ensures it never starts during normal `docker c
 ### Port binding
 
 Open WebUI and OpenCode publish on the host like other user-facing apps in this repo.
-Ollama, OpenClaw, and DCGM Exporter stay bound to `127.0.0.1`.
+Ollama and DCGM Exporter stay bound to `127.0.0.1`.
 
 This means:
 
 - LAN clients can reach Open WebUI at `http://HOST_IP:8080`
 - LAN clients can reach OpenCode at `http://HOST_IP:4096`
 - Ollama API remains local-only on `127.0.0.1:11434`
-- OpenClaw remains local-only on `127.0.0.1:8081`
 - DCGM metrics remain local-only on `127.0.0.1:9400`
 
 If you want browser access without publishing ports on the LAN, use an SSH tunnel instead.
@@ -719,13 +661,12 @@ ssh -L 8080:127.0.0.1:8080 user@homeserver
 |----------|------------|------------|
 | `OPEN_WEBUI_SECRET_KEY` | High — session encryption | `openssl rand -hex 32` |
 | `OPENCODE_SERVER_PASSWORD` | High — OpenCode web/API login | `openssl rand -base64 24` |
-| `OPENCLAW_IMAGE` | Low — optional profile image reference | N/A |
 
 Discord bot tokens (future) should also go in `.env`, never in committed config files.
 
 ### Least privilege
 
-- Open WebUI and OpenClaw have **no GPU access** — they only talk to Ollama over HTTP.
+- Open WebUI has **no GPU access** — it only talks to Ollama over HTTP.
 - OpenCode has **no GPU access** — it only talks to Ollama over HTTP and reads/writes the bind-mounted workspace.
 - DCGM Exporter has `SYS_ADMIN` capability — required to read GPU counters. It has no network egress outside the Docker networks.
 - No container has access to the Docker socket.
@@ -748,7 +689,6 @@ If you later expose Open WebUI via your VPS nginx + Authelia:
 | Ollama models | `$AI_ACTIVE_DATA_DIR/ollama/` | Low — can re-pull from registry. Back up only custom models. |
 | Open WebUI data | `$AI_ACTIVE_DATA_DIR/open-webui/` | Medium — chat history, user accounts, settings. |
 | OpenCode data | `$AI_ACTIVE_DATA_DIR/opencode/` | Medium — sessions, auth storage, snapshots. |
-| OpenClaw data | `$AI_ACTIVE_DATA_DIR/openclaw/` | Medium — agent state. |
 | LoRA adapters | `$AI_ACTIVE_DATA_DIR/lora-adapters/` | **High** — training output, expensive to reproduce. |
 | Archive store | `$AI_ARCHIVE_DATA_DIR/` | Medium — long-term datasets, old runs, backups. |
 | Config files | `services/ai-stack/` | **High** — in Git, push regularly. |
@@ -874,30 +814,11 @@ Then restart Open WebUI:
 docker compose up -d open-webui
 ```
 
-### OpenClaw is optional and not part of the default boot path
+### OpenClaw has been separated
 
-The default `docker compose up -d` path in this repo intentionally skips
-OpenClaw. It is behind the `openclaw` profile because upstream OpenClaw uses a
-different gateway-first Docker layout than the rest of this homelab stack.
-
-Default startup:
-
-```bash
-docker compose up -d
-```
-
-Experimental opt-in startup:
-
-```bash
-docker compose --profile openclaw up -d openclaw
-```
-
-If you want a full upstream-supported OpenClaw deployment instead of this
-experimental profile, follow the official Docker guide and published GHCR image:
-
-1. Use `ghcr.io/openclaw/openclaw:latest` or a pinned release tag.
-2. Follow https://docs.openclaw.ai/install/docker for the gateway + CLI layout.
-3. Use Open WebUI and OpenCode as the default local interfaces in this repo until you have validated the OpenClaw gateway configuration on your host.
+OpenClaw is no longer part of the AI stack compose project. It has its own
+standalone deployment at `services/openclaw/`. See `guide/OPENCLAW.md` for
+setup, configuration, and operational docs.
 
 ### OpenCode starts but the UI is blank or models are missing
 

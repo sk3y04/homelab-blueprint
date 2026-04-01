@@ -1,0 +1,85 @@
+# --------------------------------------------------------------------------------
+# OpenClaw — Standalone AI Agent Gateway
+# --------------------------------------------------------------------------------
+# Self-hosted personal AI assistant gateway backed by a local Ollama instance.
+#
+# This is a standalone compose project separated from the AI stack. OpenClaw
+# joins the ai-stack bridge network as an external consumer so it can reach
+# Ollama at ollama:11434 via Docker DNS, but otherwise has an independent
+# lifecycle, storage, and upgrade path.
+#
+# Networking:
+#   - Joins the external ai-stack network for Ollama connectivity.
+#   - Defines its own 'openclaw' bridge network for future sidecar services
+#     (CLI, bridge, etc.).
+#   - Gateway port is published on 127.0.0.1 only — not exposed to the LAN.
+#
+# Persistence:
+#   - All persistent state lives on RAID6 via explicit bind mounts.
+#   - Config, credentials, workspace, and logs survive container recreation.
+#
+# Usage:
+#   cp .env.example .env   # edit secrets and paths
+#   docker compose up -d
+# --------------------------------------------------------------------------------
+
+services:
+  openclaw-gateway:
+    image: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:2026.2.26}
+    container_name: openclaw-gateway
+    restart: unless-stopped
+
+    user: "${PUID:-1000}:${PGID:-1000}"
+
+    ports:
+      - "127.0.0.1:${OPENCLAW_GATEWAY_PORT:-18789}:18789"
+
+    command: ["node", "dist/index.js", "gateway", "--bind", "${OPENCLAW_GATEWAY_BIND:-lan}"]
+
+    environment:
+      - HOME=/home/node
+      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN}
+      - TZ=${TZ:-America/New_York}
+      # Prevent OOM on hosts with limited RAM during Node.js heap spikes.
+      - NODE_OPTIONS=--max-old-space-size=2048
+
+    volumes:
+      # Config, credentials, and runtime state.
+      - ${OPENCLAW_DATA_DIR}:/home/node/.openclaw
+      # Agent workspace (mounted over data subdir for independent backup).
+      - ${OPENCLAW_WORKSPACE_DIR}:/home/node/.openclaw/workspace
+      # Redirect ephemeral logs to persistent RAID6 storage.
+      - ${OPENCLAW_LOG_DIR}:/tmp/openclaw
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:18789/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+    security_opt:
+      - no-new-privileges:true
+
+    cap_drop:
+      - ALL
+
+    networks:
+      - openclaw
+      - ai-stack
+
+networks:
+  # Own bridge for future sidecar services (CLI, bridge, etc.).
+  openclaw:
+    name: openclaw
+    driver: bridge
+  # Join the existing ai-stack network to reach Ollama at ollama:11434.
+  ai-stack:
+    external: true
+    name: ${AI_STACK_NETWORK:-ai-stack}

@@ -69,21 +69,20 @@ set_or_append() {
   fi
 }
 
-set_or_append "OPENCLAW_DEFAULT_MODEL" "$MODEL_NAME"
 set_or_append "OPENCODE_MODEL" "ollama/${MODEL_NAME}"
 
 echo "Updated persona defaults in $ENV_FILE"
-echo "  OPENCLAW_DEFAULT_MODEL=$MODEL_NAME"
 echo "  OPENCODE_MODEL=ollama/$MODEL_NAME"
 echo "Backup written to $backup_file"
 
 if [ "$RECREATE" -eq 1 ]; then
   echo ""
   echo "Recreating services..."
-  docker compose up -d openclaw opencode
+  docker compose up -d opencode
 fi
 
 echo ""
 echo "Next steps:"
 echo "  1. Verify the persona model exists in Ollama: docker exec ai-ollama ollama list"
-echo "  2. Recreate services if you did not use --recreate: docker compose up -d openclaw opencode"
+echo "  2. Recreate services if you did not use --recreate: docker compose up -d opencode"
+echo "  3. Update OpenClaw separately if needed — see services/openclaw/README.md"

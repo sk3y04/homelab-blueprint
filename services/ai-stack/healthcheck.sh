@@ -46,18 +46,6 @@ for svc in ollama open-webui opencode dcgm-exporter; do
     *)         printf "  ✗ %-20s %s\n" "$container" "$status"; FAIL=1 ;;
   esac
 done
-
-if has_container ai-openclaw; then
-  status=$(docker inspect --format='{{.State.Health.Status}}' ai-openclaw 2>/dev/null || echo "not-found")
-  case "$status" in
-    healthy)   printf "  ✓ %-20s healthy\n" "ai-openclaw" ;;
-    unhealthy) printf "  ✗ %-20s UNHEALTHY\n" "ai-openclaw"; FAIL=1 ;;
-    starting)  printf "  … %-20s starting\n" "ai-openclaw" ;;
-    *)         printf "  ✗ %-20s %s\n" "ai-openclaw" "$status"; FAIL=1 ;;
-  esac
-else
-  printf "  - %-20s not enabled (optional profile)\n" "ai-openclaw"
-fi
 echo ""
 
 # ── Ollama API ───────────────────────────────────────────────────────────

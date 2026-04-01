@@ -560,8 +560,7 @@ docker exec ai-ollama ollama run persona "hey, what's up?"
 Current default behavior for the persona path in this repo:
 
 - the persona system prompt is biased toward direct answers and no visible chain-of-thought
-- OpenClaw caps responses at `1024` tokens to reduce long generations
-- OpenCode caps the persona model output at `1024` tokens for the same reason
+- OpenCode caps the persona model output at `1024` tokens to reduce long generations
 
 ---
 
@@ -610,8 +609,8 @@ Script:
 
 Purpose:
 
-- update `.env` to make the persona model the default for OpenClaw and OpenCode
-- optionally recreate those services immediately
+- update `.env` to make the persona model the default for OpenCode
+- optionally recreate the service immediately
 
 Usage:
 
@@ -624,12 +623,14 @@ Flags:
 
 - `--env-file`: alternate env file
 - `--model-name`: deployed persona model name
-- `--recreate`: run `docker compose up -d openclaw opencode` after updating `.env`
+- `--recreate`: run `docker compose up -d opencode` after updating `.env`
 
 What it changes:
 
-- `OPENCLAW_DEFAULT_MODEL=persona`
 - `OPENCODE_MODEL=ollama/persona`
+
+> **Note**: OpenClaw is now a separate project at `services/openclaw/`.
+> Update its `openclaw.json` independently if needed.
 
 Safety behavior:
 
@@ -748,7 +749,7 @@ Recreate the affected services:
 
 ```bash
 cd services/ai-stack
-docker compose up -d openclaw opencode
+docker compose up -d opencode
 ```
 
 ---

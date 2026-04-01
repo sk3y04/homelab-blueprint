@@ -397,7 +397,8 @@ cd services/ai-stack
 ./promote-persona-defaults.sh --model-name persona --recreate
 ```
 
-This updates defaults for OpenClaw and OpenCode to the persona model.
+This updates defaults for OpenCode to the persona model.
+To update OpenClaw separately, see `services/openclaw/README.md`.
 
 ---
 
@@ -409,7 +410,7 @@ responses rather than long visible reasoning.
 That behavior comes from:
 
 - `services/ai-stack/Modelfile.persona.example`
-- `services/ai-stack/config/openclaw/config.yaml`
+- `services/openclaw/` (standalone project — see `guide/OPENCLAW.md`)
 - `services/ai-stack/config/opencode/opencode.json`
 
 If you need even lower latency later, reduce output caps again before changing

@@ -69,7 +69,6 @@ you stop testing against a known bad model.
 Check `.env` under `services/ai-stack` and set safe defaults such as:
 
 ```bash
-OPENCLAW_DEFAULT_MODEL=qwen3.5:27b
 OPENCODE_MODEL=ollama/qwen3-coder-next
 OPENCODE_SMALL_MODEL=ollama/qwen3.5:9b
 ```
@@ -78,10 +77,10 @@ If you use those services, recreate them after the `.env` change:
 
 ```bash
 cd services/ai-stack
-docker compose up -d openclaw opencode
+docker compose up -d opencode
 ```
 
-If you are not using them, you can skip the recreate.
+Also revert OpenClaw if applicable — see `services/openclaw/README.md`.
 
 ---
 
@@ -356,7 +355,7 @@ Expected behavior from a good run:
 - `persona` does not answer with long tutorial-style paragraphs to a one-word prompt
 
 If the new `persona` still responds like a polished assistant, stop there. Do
-not promote it into OpenClaw or OpenCode.
+not promote it into OpenCode (or OpenClaw — see `services/openclaw/`).
 
 ---
 

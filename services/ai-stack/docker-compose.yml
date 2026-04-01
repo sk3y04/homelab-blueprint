@@ -1,12 +1,11 @@
 # --------------------------------------------------------------------------------
-# AI Stack — Ollama + Open WebUI + OpenClaw + OpenCode + DCGM Exporter
+# AI Stack — Ollama + Open WebUI + OpenCode + DCGM Exporter
 # --------------------------------------------------------------------------------
 # Local LLM inference stack for an NVIDIA RTX 3090 24 GB.
 #
 # Services:
 #   - ollama:          Local LLM runtime (GPU-accelerated).
 #   - open-webui:      Web UI for chatting with local models.
-#   - openclaw:        Agent layer with OpenAI-compatible backend.
 #   - opencode:        Browser-based coding agent backed by local Ollama.
 #   - dcgm-exporter:   NVIDIA GPU metrics exporter for Prometheus.
 #
@@ -21,7 +20,7 @@
 #     by container name (e.g. open-webui → ollama:11434).
 #   - dcgm-exporter also joins the external 'monitoring' network.
 #   - Browser-facing UIs (Open WebUI, OpenCode) publish on the host.
-#   - Ollama, OpenClaw, and DCGM Exporter remain bound to 127.0.0.1.
+#   - Ollama and DCGM Exporter remain bound to 127.0.0.1.
 #
 # GPU access:
 #   - Only ollama and dcgm-exporter receive GPU device reservations.
@@ -162,52 +161,6 @@ services:
       timeout: 10s
       retries: 5
       start_period: 45s
-
-    networks:
-      - ai-stack
-
-  # ── OpenClaw — Optional Agent Layer ────────────────────────────────────
-  # This service is disabled by default behind the `openclaw` profile.
-  # The upstream OpenClaw Docker deployment uses a different gateway-first
-  # compose layout than this homelab stack, so treat this service as an
-  # experimental integration point rather than part of the default boot set.
-  #
-  # Default startup (safe):
-  #   docker compose up -d
-  #
-  # Opt-in startup (experimental):
-  #   docker compose --profile openclaw up -d openclaw
-  openclaw:
-    image: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:latest}
-    container_name: ai-openclaw
-    restart: unless-stopped
-    profiles: ["openclaw"]
-
-    depends_on:
-      ollama:
-        condition: service_healthy
-
-    ports:
-      - "127.0.0.1:${OPENCLAW_PORT:-8081}:8080"
-
-    environment:
-      - TZ=${TZ}
-      # Point to Ollama's OpenAI-compatible endpoint.
-      - OPENAI_API_BASE=http://ollama:11434/v1
-      - OPENAI_API_KEY=not-needed
-      - DEFAULT_MODEL=${OPENCLAW_DEFAULT_MODEL:-qwen3.5:27b}
-      - CONFIG_PATH=/config/config.yaml
-
-    volumes:
-      - ${AI_ACTIVE_DATA_DIR}/openclaw:/data
-      - ./config/openclaw:/config:ro
-
-    healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
 
     networks:
       - ai-stack
