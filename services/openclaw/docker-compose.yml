@@ -25,7 +25,7 @@
 
 services:
   openclaw-gateway:
-    image: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:2026.2.26}
+    image: ${OPENCLAW_IMAGE}
     container_name: openclaw-gateway
     restart: unless-stopped
 
@@ -39,7 +39,7 @@ services:
     environment:
       - HOME=/home/node
       - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN}
-      - TZ=${TZ:-America/New_York}
+      - TZ=${TZ}
       # Prevent OOM on hosts with limited RAM during Node.js heap spikes.
       - NODE_OPTIONS=--max-old-space-size=2048
 
@@ -73,6 +73,31 @@ services:
     networks:
       - openclaw
       - ai-stack
+
+  # ── OpenClaw CLI ─────────────────────────────────────────────────────────
+  # Shares the gateway's network namespace so it can reach the gateway at
+  # localhost:18789. Used for post-start management commands:
+  #   docker compose run --rm openclaw-cli channels add --channel discord --token "<token>"
+  #   docker compose run --rm openclaw-cli gateway status
+  #   docker compose run --rm openclaw-cli dashboard --no-open
+  openclaw-cli:
+    image: ${OPENCLAW_IMAGE}
+    container_name: openclaw-cli
+    network_mode: "service:openclaw-gateway"
+    profiles: ["cli"]
+
+    user: "${PUID:-1000}:${PGID:-1000}"
+
+    environment:
+      - HOME=/home/node
+      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN}
+      - TZ=${TZ:-America/New_York}
+
+    volumes:
+      - ${OPENCLAW_DATA_DIR}:/home/node/.openclaw
+      - ${OPENCLAW_WORKSPACE_DIR}:/home/node/.openclaw/workspace
+
+    entrypoint: ["node", "dist/index.js"]
 
 networks:
   # Own bridge for future sidecar services (CLI, bridge, etc.).
