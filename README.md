@@ -1,11 +1,11 @@
 # Homelab Blueprint
 
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/compose/)
-[![Services](https://img.shields.io/badge/Services-16-green.svg)](#services)
+[![Services](https://img.shields.io/badge/Services-17-green.svg)](#services)
 [![Host Services](https://img.shields.io/badge/Host_Services-2-orange.svg)](#-monero-full-node--xmrig-mining)
 [![Rocky Linux](https://img.shields.io/badge/Rocky_Linux-10-10B981?logo=rockylinux&logoColor=white)](https://rockylinux.org/)
 
-Production-ready Docker Compose stacks and host service configs for a self-hosted home server — 16 Docker services + Monero full node & XMRig miner, VPS reverse-proxy architecture, Authelia 2FA, local AI workloads, and full observability. Fork it, configure your `.env` files, and deploy.
+Production-ready Docker Compose stacks and host service configs for a self-hosted home server — 17 Docker services + Monero full node & XMRig miner, VPS reverse-proxy architecture, Authelia 2FA, local AI workloads, and full observability. Fork it, configure your `.env` files, and deploy.
 
 ---
 
@@ -29,6 +29,7 @@ Production-ready Docker Compose stacks and host service configs for a self-hoste
   - [Matrix Synapse + Element](#-matrix-synapse--element--federated-messaging)
   - [Monitoring Stack](#-monitoring-stack--observability)
   - [BentoPDF](#-bentopdf--pdf-toolkit)
+   - [Stirling Image](#-stirling-image--image-toolkit)
   - [TriliumNext Notes](#-triliumnext-notes--personal-knowledge-base)
   - [Monero Full Node & XMRig Mining](#%EF%B8%8F-monero-full-node--xmrig-mining)
 - [Guides](#guides)
@@ -421,6 +422,24 @@ Six-container deployment:
 
 ---
 
+### 🖼 Stirling Image — Image Toolkit
+
+> 📖 **Guide:** [Full Setup Guide](guide/STIRLING_IMAGE.md)
+
+| | |
+|---|---|
+| **Directory** | `services/stirling-image/` |
+| **Image** | `stirlingimage/stirling-image:latest` |
+| **Purpose** | Self-hosted image editing, conversion, OCR, and batch-processing toolkit |
+| **Port** | `1349` (HTTP) |
+
+- Single-container deployment with a browser UI, REST API, local SQLite database, and bundled OCR / ML tooling.
+- Handles resize, crop, compress, convert, watermark, background removal, OCR, and multi-file batch jobs.
+- Persists users, API keys, saved pipelines, and uploaded files under `/data` with a separate scratch workspace for processing.
+- Built-in authentication is enabled by default in the container image and seeded from environment variables on first run.
+
+---
+
 ### 📝 TriliumNext Notes — Personal Knowledge Base
 
 > 📖 **Guide:** [Full Setup Guide](guide/TRILIUM.md)
@@ -572,6 +591,7 @@ Detailed setup guides for the infrastructure surrounding these Docker stacks:
 │   ├── NGINX.md                        # Nginx reverse proxy setup guide
 │   ├── P2P_VPN.md                      # P2P / Gluetun VPN setup guide
 │   ├── PINCHFLAT.md                    # Pinchflat setup guide
+│   ├── STIRLING_IMAGE.md               # Stirling Image setup guide
 │   └── TRILIUM.md                      # TriliumNext Notes setup guide
 ├── vps/
 │   ├── pf.example.conf                 # PF firewall config (template)
@@ -640,12 +660,14 @@ Detailed setup guides for the infrastructure surrounding these Docker stacks:
     │       ├── promtail-config.yaml        # Promtail Docker log discovery
     │       └── grafana/
     │           └── provisioning/           # Auto-configured datasources & dashboards
-    ├── nextcloud/
-    │   └── docker-compose.yml              # Personal cloud platform
-    ├── p2p-gluetun/
-    │   └── docker-compose.yml              # VPN-tunneled P2P clients
-    ├── trilium/
-    │   └── docker-compose.yml              # TriliumNext personal knowledge base
+   ├── nextcloud/
+   │   └── docker-compose.yml              # Personal cloud platform
+   ├── p2p-gluetun/
+   │   └── docker-compose.yml              # VPN-tunneled P2P clients
+   ├── stirling-image/
+   │   └── docker-compose.yml              # Self-hosted image toolkit
+   ├── trilium/
+   │   └── docker-compose.yml              # TriliumNext personal knowledge base
     └── xmrig/
         └── setup.sh                        # Automated XMRig + MoneroOcean installer
 ```
@@ -901,6 +923,30 @@ Each service reads its configuration from a `.env` file in its respective direct
 | `PUID` | User ID for file permissions |
 | `PGID` | Group ID for file permissions |
 | `BENTOPDF_HTTP_PORT` | Host port for BentoPDF web UI (default `8084`) |
+
+</details>
+
+<details>
+<summary><strong>🖼 Stirling Image</strong></summary>
+
+| Variable | Description |
+|---|---|
+| `STIRLING_IMAGE_HTTP_PORT` | Host port for the Stirling Image web UI and REST API (default `1349`) |
+| `STIRLING_IMAGE_DATA_DIR` | Host path for persistent data: SQLite DB, users, API keys, pipelines, and saved files |
+| `STIRLING_IMAGE_WORKSPACE_DIR` | Host path for temporary image-processing workspace files |
+| `AUTH_ENABLED` | Enables or disables application login (`true` recommended) |
+| `DEFAULT_USERNAME` | Initial admin username used only on first run |
+| `DEFAULT_PASSWORD` | Initial admin password used only on first run |
+| `RATE_LIMIT_PER_MIN` | Maximum requests per minute per client IP |
+| `MAX_UPLOAD_SIZE_MB` | Maximum upload size accepted by the application |
+| `MAX_BATCH_SIZE` | Maximum number of files accepted in a single batch job |
+| `CONCURRENT_JOBS` | Number of batch jobs processed in parallel |
+| `MAX_MEGAPIXELS` | Maximum accepted image resolution in megapixels |
+| `FILE_MAX_AGE_HOURS` | Retention window for temporary files before cleanup |
+| `CLEANUP_INTERVAL_MINUTES` | Cleanup scheduler interval for temporary files |
+| `APP_NAME` | Display name shown in the UI |
+| `DEFAULT_THEME` | Default theme for new sessions (`light` or `dark`) |
+| `DEFAULT_LOCALE` | Default interface language |
 
 </details>
 

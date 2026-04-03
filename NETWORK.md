@@ -61,8 +61,8 @@ This document describes a network workflow for exposing self-hosted services run
                          │   │ BentoPDF │  │  Trilium      │  │
                          │   │  :8084   │  │   :8085       │  │
                          │   ├──────────┤  ├──────────────┤  │
-                         │   │Pinchflat │  │              │  │
-                         │   │  :8945   │  │              │  │
+                         │   │Pinchflat │  │ StirlingImg  │  │
+                         │   │  :8945   │  │   :1349       │  │
                          │   └──────────┘  └──────────────┘  │
                          │     Home Network (Hidden IP)       │
                          └────────────────────────────────────┘
@@ -101,7 +101,7 @@ Nginx runs natively on the FreeBSD VPS (not in Docker). It handles:
 - **TLS termination** with Let's Encrypt certificates
 - **HTTP → HTTPS redirection** for all services
 - **ACME challenge** serving for automated certificate renewal
-- **WebSocket upgrades** for services that need them (Jellyfin, Code Server, Guacamole, Pinchflat)
+- **WebSocket upgrades** for services that need them (Jellyfin, Code Server, Guacamole, Pinchflat, Stirling Image)
 - **TCP stream proxying** for non-HTTP protocols (Minecraft)
 
 ### 4. Home Server — Docker Host
@@ -129,6 +129,7 @@ All services are exposed as subdomains under `example.com`, each with its own Le
 | `auth.example.com` | Authelia | `10.8.0.2:9091` | HTTPS (HTTP/2) |
 | `grafana.example.com` | Grafana | `10.8.0.2:3100` | HTTPS (HTTP/2) |
 | `pdf.example.com` | BentoPDF | `10.8.0.2:8084` | HTTPS (HTTP/2) |
+| `images.example.com` | Stirling Image | `10.8.0.2:1349` | HTTPS (HTTP/2) |
 | `notes.example.com` | TriliumNext Notes | `10.8.0.2:8085` | HTTPS (HTTP/2) |
 | `example.com` | .well-known delegation | (static JSON) | HTTPS (HTTP/2) |
 | — | Minecraft Server | `10.8.0.2:25565` | TCP (stream) |
@@ -180,6 +181,11 @@ Certificate files are stored at `/usr/local/etc/letsencrypt/live/<domain>/` on t
 - WebSocket support is required for real-time UI updates.
 - Prefer Pinchflat's built-in HTTP Basic Auth when the app is internet-facing.
 - If you expose podcast / RSS feed endpoints, do not place blanket reverse-proxy auth in front of those routes unless you explicitly exempt them.
+
+### Stirling Image
+- Set `client_max_body_size` in nginx to match the app's `MAX_UPLOAD_SIZE_MB` value.
+- Keep standard upgrade headers enabled when proxying the UI and API.
+- Prefer Stirling Image's built-in auth over reverse-proxy auth so app sessions and API keys behave normally.
 
 ### qBittorrent
 - Standard reverse proxy with 600s timeouts.

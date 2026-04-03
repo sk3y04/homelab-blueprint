@@ -168,6 +168,7 @@ Each service on the home server is defined as an upstream pointing to the tunnel
 | `code_upstream` | `10.8.0.2:8443` | 8 |
 | `torrent_upstream` | `10.8.0.2:8081` | 8 |
 | `guac_upstream` | `10.8.0.2:8080` | 8 |
+| `stirling_image_upstream` | `10.8.0.2:1349` | 8 |
 | `soulseek_upstream` | `10.8.0.2:6080` | 8 |
 
 > Higher `keepalive` values for Jellyfin and Nextcloud reflect their heavier traffic patterns (streaming, large file transfers).
@@ -195,6 +196,7 @@ Each HTTPS block includes:
 | **Jellyfin** | `proxy_buffering off` for smooth media streaming; WebSocket support |
 | **Nextcloud** | `client_max_body_size 20G`; timeouts extended to `3600s` for large uploads; RainLoop data path denied |
 | **Code Server** | Timeouts extended to `3600s` for long-lived sessions; WebSocket support critical |
+| **Stirling Image** | `client_max_body_size` should match `MAX_UPLOAD_SIZE_MB`; prefer app auth over Authelia to keep API usage straightforward |
 | **qBittorrent** | Standard proxy with `600s` timeouts |
 | **Guacamole** | `proxy_buffering off` for low-latency remote desktop; WebSocket support required |
 
@@ -222,6 +224,7 @@ certbot certonly --webroot -w /usr/local/www -d cloud.example.com
 certbot certonly --webroot -w /usr/local/www -d code.example.com
 certbot certonly --webroot -w /usr/local/www -d torrent.example.com
 certbot certonly --webroot -w /usr/local/www -d vm.example.com
+certbot certonly --webroot -w /usr/local/www -d images.example.com
 certbot certonly --webroot -w /usr/local/www -d soulseek.example.com
 ```
 
