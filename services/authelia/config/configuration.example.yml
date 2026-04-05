@@ -96,6 +96,18 @@ access_control:
     - domain: "jellyfin.example.com"
       policy: bypass
 
+    # Nextcloud public shares and static assets must bypass Authelia.
+    - domain: "cloud.example.com"
+      resources:
+        - '^/s/.*$'
+        - '^/public\.php.*$'
+        - '^/apps/.*$'
+        - '^/core.*$'
+        - '^/dist.*$'
+        - '^/js.*$'
+        - '^/viewer.*$'
+      policy: bypass
+
     # Services requiring full 2FA (password + YubiKey/TOTP).
     # These are examples; replace/remove with your actual services.
     - domain: "cloud.example.com"

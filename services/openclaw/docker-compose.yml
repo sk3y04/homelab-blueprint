@@ -29,12 +29,12 @@ services:
     container_name: openclaw-gateway
     restart: unless-stopped
 
-    user: "${PUID:-1000}:${PGID:-1000}"
+    user: "${PUID}:${PGID}"
 
     ports:
-      - "127.0.0.1:${OPENCLAW_GATEWAY_PORT:-18789}:18789"
+      - "0.0.0.0:${OPENCLAW_GATEWAY_PORT}:18789"
 
-    command: ["node", "dist/index.js", "gateway", "--bind", "${OPENCLAW_GATEWAY_BIND:-lan}"]
+    command: ["node", "dist/index.js", "gateway", "--bind", "${OPENCLAW_GATEWAY_BIND}"]
 
     environment:
       - HOME=/home/node
@@ -86,12 +86,12 @@ services:
     network_mode: "service:openclaw-gateway"
     profiles: ["cli"]
 
-    user: "${PUID:-1000}:${PGID:-1000}"
+    user: "${PUID}:${PGID}"
 
     environment:
       - HOME=/home/node
       - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN}
-      - TZ=${TZ:-America/New_York}
+      - TZ=${TZ}
 
     volumes:
       - ${OPENCLAW_DATA_DIR}:/home/node/.openclaw
@@ -107,4 +107,4 @@ networks:
   # Join the existing ai-stack network to reach Ollama at ollama:11434.
   ai-stack:
     external: true
-    name: ${AI_STACK_NETWORK:-ai-stack}
+    name: ${AI_STACK_NETWORK}

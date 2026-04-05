@@ -47,7 +47,7 @@ services:
       - GF_AUTH_PROXY_HEADER_NAME=Remote-User
       - GF_AUTH_PROXY_HEADER_PROPERTY=username
       - GF_AUTH_PROXY_AUTO_SIGN_UP=true
-      - GF_SERVER_ROOT_URL=${GF_SERVER_ROOT_URL:-https://grafana.example.com}
+      - GF_SERVER_ROOT_URL=${GF_SERVER_ROOT_URL}
       # Allow embedding in iframes behind Authelia.
       - GF_SECURITY_ALLOW_EMBEDDING=true
 
@@ -166,7 +166,7 @@ services:
     restart: unless-stopped
 
     ports:
-      - "127.0.0.1:${XMRIG_EXPORTER_PORT:-9189}:9189"
+      - "127.0.0.1:${XMRIG_EXPORTER_PORT}:9189"
 
     environment:
       - TZ=${TZ}
@@ -199,13 +199,13 @@ services:
               capabilities: [gpu, utility]
 
     ports:
-      - "127.0.0.1:${NVIDIA_SMI_EXPORTER_PORT:-9836}:9835"
+      - "127.0.0.1:${NVIDIA_SMI_EXPORTER_PORT}:9835"
 
     environment:
       - TZ=${TZ}
       - EXPORTER_PORT=9835
       # Expose all GPUs; override with a UUID or index (e.g. "0") to pin one.
-      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES}
       # Only the utility capability is needed for nvidia-smi queries.
       - NVIDIA_DRIVER_CAPABILITIES=utility
 
@@ -224,7 +224,7 @@ services:
     privileged: true
 
     ports:
-      - "127.0.0.1:${SMARTCTL_EXPORTER_PORT:-9633}:9633"
+      - "127.0.0.1:${SMARTCTL_EXPORTER_PORT}:9633"
 
     environment:
       - TZ=${TZ}

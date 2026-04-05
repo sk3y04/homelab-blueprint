@@ -41,14 +41,14 @@ services:
     restart: unless-stopped
 
     ports:
-      - "127.0.0.1:${OLLAMA_PORT:-11434}:11434"
+      - "127.0.0.1:${OLLAMA_PORT}:11434"
 
     environment:
       - TZ=${TZ}
       # Only keep 1 model loaded — the 3090 cannot hold two 32B models.
-      - OLLAMA_MAX_LOADED_MODELS=${OLLAMA_MAX_LOADED_MODELS:-1}
+      - OLLAMA_MAX_LOADED_MODELS=${OLLAMA_MAX_LOADED_MODELS}
       # Parallel request slots — 1 is the safest default on a 24 GB 3090.
-      - OLLAMA_NUM_PARALLEL=${OLLAMA_NUM_PARALLEL:-1}
+      - OLLAMA_NUM_PARALLEL=${OLLAMA_NUM_PARALLEL}
       # Enable flash attention for faster inference and lower VRAM usage.
       - OLLAMA_FLASH_ATTENTION=1
       # Allow connections from other containers on the Docker network.
@@ -83,7 +83,7 @@ services:
   # Full-featured web UI for interacting with Ollama models.
   # Stores chat history, user accounts, and settings in a local SQLite DB.
   open-webui:
-    image: ${OPEN_WEBUI_IMAGE:-ghcr.io/open-webui/open-webui:v0.8.10}
+    image: ${OPEN_WEBUI_IMAGE}
     container_name: ai-open-webui
     restart: unless-stopped
 
@@ -92,20 +92,20 @@ services:
         condition: service_healthy
 
     ports:
-      - "${OPEN_WEBUI_PORT:-8080}:8080"
+      - "${OPEN_WEBUI_PORT}:8080"
 
     environment:
       - TZ=${TZ}
       - OLLAMA_BASE_URL=http://ollama:11434
       - WEBUI_SECRET_KEY=${OPEN_WEBUI_SECRET_KEY}
       - CORS_ALLOW_ORIGIN=${OPEN_WEBUI_CORS_ALLOW_ORIGIN}
-      - USER_AGENT=${OPEN_WEBUI_USER_AGENT:-homelab-blueprint-open-webui/1.0}
-      - HF_TOKEN=${OPEN_WEBUI_HF_TOKEN:-}
+      - USER_AGENT=${OPEN_WEBUI_USER_AGENT}
+      - HF_TOKEN=${OPEN_WEBUI_HF_TOKEN}
       # Disable telemetry.
       - SCARF_NO_ANALYTICS=true
       - DO_NOT_TRACK=true
       # Disable signup after first admin account is created.
-      - ENABLE_SIGNUP=${OPEN_WEBUI_ENABLE_SIGNUP:-false}
+      - ENABLE_SIGNUP=${OPEN_WEBUI_ENABLE_SIGNUP}
 
     volumes:
       - ${AI_ACTIVE_DATA_DIR}/open-webui:/app/backend/data
@@ -136,7 +136,7 @@ services:
     command: ["web", "--hostname=0.0.0.0", "--port=4096"]
 
     ports:
-      - "${OPENCODE_PORT:-4096}:4096"
+      - "${OPENCODE_PORT}:4096"
 
     environment:
       - TZ=${TZ}
@@ -145,10 +145,10 @@ services:
       - XDG_DATA_HOME=/data/share
       - OPENCODE_CONFIG=/config/opencode.json
       - OPENCODE_SERVER_PASSWORD=${OPENCODE_SERVER_PASSWORD}
-      - OPENCODE_SERVER_USERNAME=${OPENCODE_SERVER_USERNAME:-opencode}
+      - OPENCODE_SERVER_USERNAME=${OPENCODE_SERVER_USERNAME}
       - OPENCODE_DISABLE_AUTOUPDATE=true
-      - OPENCODE_MODEL=${OPENCODE_MODEL:-ollama/qwen3-coder-next}
-      - OPENCODE_SMALL_MODEL=${OPENCODE_SMALL_MODEL:-ollama/qwen3.5:9b}
+      - OPENCODE_MODEL=${OPENCODE_MODEL}
+      - OPENCODE_SMALL_MODEL=${OPENCODE_SMALL_MODEL}
 
     volumes:
       - ${AI_ACTIVE_DATA_DIR}/opencode:/data
@@ -156,7 +156,7 @@ services:
       - ./config/opencode/opencode.json:/config/opencode.json:ro
 
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf -u \"$${OPENCODE_SERVER_USERNAME:-opencode}:$${OPENCODE_SERVER_PASSWORD}\" http://localhost:4096/global/health >/dev/null || exit 1"]
+      test: ["CMD-SHELL", "curl -sf -u \"$${OPENCODE_SERVER_USERNAME}:$${OPENCODE_SERVER_PASSWORD}\" http://localhost:4096/global/health >/dev/null || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -181,7 +181,7 @@ services:
     restart: unless-stopped
 
     ports:
-      - "127.0.0.1:${DCGM_EXPORTER_PORT:-9400}:9400"
+      - "127.0.0.1:${DCGM_EXPORTER_PORT}:9400"
 
     environment:
       - TZ=${TZ}
@@ -217,7 +217,7 @@ services:
   # export, and experiment logging. Only starts when the `training` profile
   # is explicitly requested.
   training:
-    image: ${AI_TRAINING_IMAGE:-unsloth/unsloth:latest}
+    image: ${AI_TRAINING_IMAGE}
     container_name: ai-training
     profiles: ["training"]
     user: "0:0"
@@ -233,14 +233,14 @@ services:
       - HF_HOME=/workspace/.cache/huggingface
       - HUGGINGFACE_HUB_CACHE=/workspace/.cache/huggingface
       - TRANSFORMERS_CACHE=/workspace/.cache/huggingface
-      - AI_TRAINING_AUTO_FIX_TRANSFORMERS=${AI_TRAINING_AUTO_FIX_TRANSFORMERS:-true}
-      - AI_TRAINING_TRANSFORMERS_VERSION=${AI_TRAINING_TRANSFORMERS_VERSION:-}
+      - AI_TRAINING_AUTO_FIX_TRANSFORMERS=${AI_TRAINING_AUTO_FIX_TRANSFORMERS}
+      - AI_TRAINING_TRANSFORMERS_VERSION=${AI_TRAINING_TRANSFORMERS_VERSION}
 
     volumes:
       - ${AI_ACTIVE_DATA_DIR}/training:/workspace
       - ${AI_ACTIVE_DATA_DIR}/lora-adapters:/output
       - ${AI_ARCHIVE_DATA_DIR}:/archive
-      - ${LLAMA_CPP_DIR:-/opt/llama.cpp}:/opt/llama.cpp:ro
+      - ${LLAMA_CPP_DIR}:/opt/llama.cpp:ro
       - ../../:/repo:ro
 
     deploy:

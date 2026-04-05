@@ -28,22 +28,22 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        PYTORCH_IMAGE: ${PYTORCH_IMAGE:-pytorch/pytorch:2.10.0-cuda13.0-cudnn9-runtime}
-        COMFYUI_VERSION: ${COMFYUI_VERSION:-master}
+        PYTORCH_IMAGE: ${PYTORCH_IMAGE}
+        COMFYUI_VERSION: ${COMFYUI_VERSION}
     image: homelab/comfyui:latest
     container_name: comfyui
     restart: unless-stopped
 
     ports:
-      - "${COMFYUI_PORT:-8188}:8188"
+      - "${COMFYUI_PORT}:8188"
 
     environment:
-      - TZ=${TZ:-America/New_York}
+      - TZ=${TZ}
       - NVIDIA_VISIBLE_DEVICES=all
-      - HOST_UID=${HOST_UID:-}
-      - HOST_GID=${HOST_GID:-}
+      - HOST_UID=${HOST_UID}
+      - HOST_GID=${HOST_GID}
       # Extra CLI arguments for ComfyUI main.py (see .env.example).
-      - COMFYUI_EXTRA_ARGS=${COMFYUI_EXTRA_ARGS:-}
+      - COMFYUI_EXTRA_ARGS=${COMFYUI_EXTRA_ARGS}
       # HuggingFace / pip cache paths inside the container.
       - HF_HOME=/root/.cache/huggingface
       - PIP_CACHE_DIR=/root/.cache/pip
